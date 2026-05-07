@@ -1,32 +1,35 @@
 {
   "schemaVersion": 1,
-  "id": "e4mc",
+  "id": "e4all",
   "version": "${version}",
-  "name": "e4mc",
-  "description": "Open a LAN server to anyone, anywhere, anytime.",
+  "name": "e4all",
+  "description": "Open a LAN server to anyone, anywhere, anytime. Enhanced with Online/Offline Mode support.",
   "authors": [
-    "skyevg"
+    "JustPixel"
+  ],
+  "contributors": [
+    "skyevg (Original e4mc infrastructure)"
   ],
   "contact": {
-    "homepage": "https://e4mc.link/",
     "sources": "https://github.com/vgskye/e4mc-minecraft-architectury"
   },
   "license": "MIT",
-  "icon": "e4mc_icon.png",
+  "icon": "e4all_icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "link.e4mc.fabric.E4mcClientFabric"
+      "link.e4all.fabric.E4allClientFabric"
     ]
   },
   "mixins": [
-    "e4mc.mixins.json"
+    "e4all.mixins.json"
   ],
   "depends": {
     "fabric": "*",
     "minecraft": ">=1.18"
   },
   "provides": [
-    "e4mc_minecraft"
+    "e4mc_minecraft",
+    "e4mc"
   ]
 }

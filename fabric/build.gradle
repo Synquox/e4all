@@ -78,6 +78,8 @@ tasks.register("modernRemapJar", net.fabricmc.loom.task.RemapJarTask) {
     targetNamespace = "named"
 }
 
+assemble.dependsOn(modernRemapJar)
+
 components.java {
     withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
         skip()
@@ -89,6 +91,7 @@ publishing {
         mavenFabric(MavenPublication) {
             artifactId = rootProject.archives_base_name + "-" + project.name
             from components.java
+            artifact modernRemapJar
         }
     }
 
@@ -99,7 +102,7 @@ publishing {
             url "https://sg.storage.bunnycdn.com/skyeven"
             credentials(HttpHeaderCredentials) {
                 name = "AccessKey"
-                value = property("skyevenToken")
+                value = findProperty("skyevenToken") ?: ""
             }
             authentication {
                 header(HttpHeaderAuthentication)
@@ -120,8 +123,8 @@ publishMods {
 
     // Uncomment your desired platform(s)
     curseforge {
-        accessToken = project.curseforgeApiToken
-        projectId = project.curseforgeId
+        accessToken = project.findProperty("curseforgeApiToken") ?: ""
+        projectId = project.findProperty("curseforgeId") ?: ""
         minecraftVersions.addAll(
                 "1.18", "1.18.1", "1.18.2",
                 "1.19", "1.19.1", "1.19.2", "1.19.3", "1.19.4",
@@ -139,8 +142,8 @@ publishMods {
     }
 
     modrinth {
-        accessToken = project.modrinthApiToken
-        projectId = project.modrinthId
+        accessToken = project.findProperty("modrinthApiToken") ?: ""
+        projectId = project.findProperty("modrinthId") ?: ""
         additionalFiles.from(sourcesJar.archiveFile)
         minecraftVersions.addAll(
                 "1.18", "1.18.1", "1.18.2",
@@ -159,8 +162,8 @@ publishMods {
     }
 
     curseforge("curseforgeModern") {
-        accessToken = project.curseforgeApiToken
-        projectId = project.curseforgeId
+        accessToken = project.findProperty("curseforgeApiToken") ?: ""
+        projectId = project.findProperty("curseforgeId") ?: ""
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
                 "26.1"
@@ -176,8 +179,8 @@ publishMods {
     }
 
     modrinth("modrinthModern") {
-        accessToken = project.modrinthApiToken
-        projectId = project.modrinthId
+        accessToken = project.findProperty("modrinthApiToken") ?: ""
+        projectId = project.findProperty("modrinthId") ?: ""
         file = modernRemapJar.archiveFile
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(

@@ -1,0 +1,28 @@
+{
+  "required": true,
+  "package": "link.e4all.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "minVersion": "0.8",
+  "mixins": [
+    "BanListCommandsMixin",
+    "BanPlayerCommandsMixin",
+    "ConnectionMixin",
+    "MinecraftServerMixin",
+    "OfflineModeMixin",
+    "PardonCommandMixin",
+    "ServerboundKeyPacketMixin",
+    "ServerConnectionListenerMixin",
+    "ServerLoginPacketListenerImplMixin",
+    "WhitelistCommandMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "ClientHandshakePacketListenerImplMixin",
+    "PlayerListMixin",
+    "ServerAddressMixin",
+    "ServerNameResolverMixin",
+    "ShareToLanScreenMixin"
+  ]
+}

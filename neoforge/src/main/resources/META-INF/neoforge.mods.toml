@@ -3,27 +3,25 @@ loaderVersion = "*"
 license = "MIT"
 
 [[mods]]
-modId = "e4mc"
+modId = "e4all"
 version = "${version}"
-displayName = "e4mc"
-logoFile = "e4mc_icon.png"
-credits = "skyevg"
-authors = "skyevg"
-description = '''
-Open a LAN server to anyone, anywhere, anytime.
-'''
+displayName = "e4all"
+logoFile = "e4all_icon.png"
+credits = "skyevg (Original e4mc infrastructure)"
+authors = "JustPixel"
+description = "Open a LAN server to anyone, anywhere, anytime. Enhanced with Online/Offline Mode support."
 
 [[mixins]]
-config = "e4mc.mixins.json"
+config = "e4all.mixins.json"
 
-[[dependencies.e4mc]]
+[[dependencies.e4all]]
 modId = "neoforge"
 mandatory = true
 versionRange = "*"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.e4mc]]
+[[dependencies.e4all]]
 modId = "minecraft"
 mandatory = true
 versionRange = "[1.18,)"
