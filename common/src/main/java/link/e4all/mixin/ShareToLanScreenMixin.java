@@ -153,15 +153,7 @@ public abstract class ShareToLanScreenMixin extends Screen {
             return constructor.newInstance(x, y, width, height, text, (Button.OnPress) this::e4all$onToggle);
         } catch (Exception ignored) {}
 
-        // Last resort: try with tooltip parameter (some versions)
-        try {
-            var constructor = Button.class.getConstructor(
-                int.class, int.class, int.class, int.class, Component.class, Button.OnPress.class, Button.CreateNarration.class
-            );
-            return constructor.newInstance(x, y, width, height, text, (Button.OnPress) this::e4all$onToggle, (Button.CreateNarration) supplier -> (net.minecraft.network.chat.MutableComponent) text);
-        } catch (Exception e) {
-            throw new RuntimeException("e4all: Could not create button for any known MC version", e);
-        }
+        throw new RuntimeException("e4all: Could not create button for any known MC version");
     }
 
     /**
@@ -190,13 +182,21 @@ public abstract class ShareToLanScreenMixin extends Screen {
                     return;
                 } catch (NoSuchMethodException ignored) {}
 
-                // Try with Renderable (some versions)
-                try {
-                    Method method = Screen.class.getDeclaredMethod(name, net.minecraft.client.gui.components.Renderable.class);
-                    method.setAccessible(true);
-                    method.invoke(this, button);
-                    return;
-                } catch (NoSuchMethodException ignored) {}
+                // Try with Renderable/Widget (varies by MC version, use Class.forName to avoid load-time crash)
+                for (String renderableClassName : new String[]{
+                    "net.minecraft.client.gui.components.Renderable",
+                    "net.minecraft.client.gui.components.Widget",
+                    "net.minecraft.client.gui.Drawable",
+                    "net.minecraft.class_4068"
+                }) {
+                    try {
+                        Class<?> renderableClass = Class.forName(renderableClassName);
+                        Method method = Screen.class.getDeclaredMethod(name, renderableClass);
+                        method.setAccessible(true);
+                        method.invoke(this, button);
+                        return;
+                    } catch (ClassNotFoundException | NoSuchMethodException ignored) {}
+                }
 
                 // Try with Widget (newer versions)
                 for (Method method : Screen.class.getDeclaredMethods()) {

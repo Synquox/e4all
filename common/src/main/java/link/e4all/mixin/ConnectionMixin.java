@@ -11,7 +11,7 @@ import link.e4all.dialtone.DialtoneAddress;
 import link.e4all.dialtone.DialtoneAmbientSession;
 import link.e4all.dialtone.DialtoneChannel;
 import net.minecraft.network.Connection;
-import net.minecraft.util.SampleLogger;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
