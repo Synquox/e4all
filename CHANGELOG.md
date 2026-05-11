@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- Fixed a `DecoderException` ("incorrect header check") occurring on Dialtone connections by bypassing redundant Minecraft packet compression.
+- Improved cross-version UI compatibility using robust reflection for "Open to LAN" screen modifications.
+- Reinforced resource cleanup for networking tunnels.
+- Prepared for wider distribution under the `e4all` brand.
+
 ## 6.1.0
 
 - Support for 26.1 added. Note that Fabric requires the use of a separate modern jar for 26.1!
