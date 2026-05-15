@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 public class E4allClient {
     public static final String MOD_ID = "e4all";
     public static volatile QuiclimeSession session;
+    public static final Object SESSION_LOCK = new Object();
     public static final Logger LOGGER = LoggerFactory.getLogger(E4allClient.MOD_ID);
 
     public static boolean badurl = false;
@@ -51,11 +52,13 @@ public class E4allClient {
                             }
                         })
                         .then(Commands.literal("stop").executes(ctx -> {
-                            if ((session != null) && (session.state != QuiclimeSession.State.STOPPED)) {
-                                session.stop();
-                                Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4mc_minecraft.closeServer"));
-                            } else {
-                                Mirror.sendFailureToSource(ctx.getSource(), Mirror.translatable("text.e4mc_minecraft.serverAlreadyClosed"));
+                            synchronized (SESSION_LOCK) {
+                                if ((session != null) && (session.state != QuiclimeSession.State.STOPPED)) {
+                                    session.stop();
+                                    Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4mc_minecraft.closeServer"));
+                                } else {
+                                    Mirror.sendFailureToSource(ctx.getSource(), Mirror.translatable("text.e4mc_minecraft.serverAlreadyClosed"));
+                                }
                             }
                             return 1;
                         }))
@@ -72,17 +75,22 @@ public class E4allClient {
                             return 1;
                         }))
                         .then(Commands.literal("restart").executes(ctx -> {
-                            if (E4allClient.session != null) {
-                                // Capture references before stopping
-                                var handler = E4allClient.session.handler;
-                                var group = E4allClient.session.group;
-                                // Stop existing session regardless of state
-                                if (E4allClient.session.state != QuiclimeSession.State.STOPPED) {
-                                    E4allClient.session.stop();
+                            synchronized (SESSION_LOCK) {
+                                if (E4allClient.session != null) {
+                                    var rawHandler = E4allClient.session.handler;
+                                    var group = E4allClient.session.group;
+                                    if (rawHandler instanceof VoiceChatBridgeInitializer wrapper) {
+                                        rawHandler = wrapper.getOriginalHandler();
+                                    }
+                                    if (E4allClient.session.state != QuiclimeSession.State.STOPPED) {
+                                        E4allClient.session.stop();
+                                    }
+                                    VoiceChatBridge.resetCachedPort();
+                                    E4allClient.session = new QuiclimeSession(
+                                        new VoiceChatBridgeInitializer(rawHandler, true), group);
+                                    E4allClient.session.startAsync();
+                                    Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal("e4all: Restarting relay connection..."));
                                 }
-                                E4allClient.session = new QuiclimeSession(handler, group);
-                                E4allClient.session.startAsync();
-                                Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal("e4all: Restarting relay connection..."));
                             }
                             return 1;
                         }))
@@ -94,7 +102,8 @@ public class E4allClient {
                                     ? "text.e4mc_minecraft.offlineModeDisabled"
                                     : "text.e4mc_minecraft.offlineModeEnabled"));
                             Mirror.sendSuccessToSource(ctx.getSource(),
-                                Mirror.literal("§7Note: This change applies to new connections only."));
+                                Mirror.withStyle(Mirror.literal("Note: This change applies to new connections only."), it ->
+                                    it.withColor(net.minecraft.ChatFormatting.GRAY)));
                             return 1;
                         }))
         );

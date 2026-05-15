@@ -4,8 +4,10 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
+import link.e4all.Config;
 import link.e4all.DialtoneConnectionExtensions;
 import link.e4all.E4allClient;
+import link.e4all.VoiceChatBridgeHandler;
 import link.e4all.SmugglersInetSocketAddress;
 import link.e4all.dialtone.DialtoneAddress;
 import link.e4all.dialtone.DialtoneAmbientSession;
@@ -94,6 +96,19 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         if (channel instanceof DialtoneChannel) {
             encrypted = true;
             ci.cancel();
+        }
+    }
+
+    // Add client-side voice chat bridge handler to DialtoneChannel connections
+    @Inject(method = "/^(channelActive|method_10757|m_129508_)$/", at = @At("TAIL"), require = 0)
+    private void e4all$addVoiceBridgeOnActive(ChannelHandlerContext ctx, CallbackInfo ci) {
+        if (channel instanceof DialtoneChannel && Config.INSTANCE.voiceChatBridgeEnabled.value()) {
+            try {
+                channel.pipeline().addLast("e4all_voicebridge", new VoiceChatBridgeHandler(false));
+                E4allClient.LOGGER.debug("Added client-side voice chat bridge to DialtoneChannel");
+            } catch (Exception e) {
+                E4allClient.LOGGER.debug("Could not add client voice chat bridge", e);
+            }
         }
     }
 

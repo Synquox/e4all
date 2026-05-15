@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+- Added Simple Voice Chat bridge: voice chat now works over e4all tunneled connections.
+- Fixed memory leaks in voice chat packet handling.
+- Fixed spurious disconnection events on failed Dialtone connections.
+- Fixed incorrect icon references in Forge and NeoForge mod descriptors.
+- Updated repository URLs in Fabric mod descriptors.
+
 ## 1.2.0
 
 - Fixed a `DecoderException` ("incorrect header check") occurring on Dialtone connections by bypassing redundant Minecraft packet compression.

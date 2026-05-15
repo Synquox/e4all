@@ -16,7 +16,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +25,9 @@ import java.util.UUID;
  * Mixin that intercepts the Mojang authentication flow to support offline mode.
  * When offline mode is enabled in the config, this bypasses the session server
  * verification and allows unauthenticated (cracked) clients to join.
+ *
+ * NOTE: This applies to ALL server connections (LAN and tunneled), not just
+ * e4all connections. This is intentional to support mixed connection scenarios.
  *
  * This is separate from the Dialtone encryption handling in ServerLoginPacketListenerImplMixin.
  */

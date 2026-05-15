@@ -72,6 +72,7 @@ public class DialtoneChannel extends AbstractChannel {
         if (closed) {
             return;
         }
+        boolean wasActive = stream != null;
         closed = true;
         try {
             if (stream != null) {
@@ -89,7 +90,13 @@ public class DialtoneChannel extends AbstractChannel {
         }
         stream = null;
         connection = null;
-        pipeline().fireChannelInactive();
+        if (wasActive) {
+            if (eventLoop().inEventLoop()) {
+                pipeline().fireChannelInactive();
+            } else {
+                eventLoop().execute(() -> pipeline().fireChannelInactive());
+            }
+        }
     }
 
     @Override
@@ -98,27 +105,34 @@ public class DialtoneChannel extends AbstractChannel {
             return;
         }
         if (!readInFlight.compareAndSet(false, true)) {
-//            E4allClient.LOGGER.info("doBeginRead called but a read was already in flight");
             return;
         }
-//        E4allClient.LOGGER.info("doBeginRead called");
         stream.readIrohStreamByteArray(65536).thenAccept(arr -> {
             readInFlight.set(false);
-            if (arr == null) {
-                if (!closed) {
-                    doClose();
+            // All pipeline events must be fired on the event loop thread.
+            // The iroh CompletableFuture may complete on a native thread.
+            eventLoop().execute(() -> {
+                if (arr == null) {
+                    if (!closed) {
+                        doClose();
+                    }
+                    return;
                 }
-                return;
-            }
-//            E4allClient.LOGGER.info("received {}", HexFormat.of().formatHex(arr));
-            pipeline().fireChannelRead(Unpooled.wrappedBuffer(arr));
-            pipeline().fireChannelReadComplete();
+                pipeline().fireChannelRead(Unpooled.wrappedBuffer(arr));
+                pipeline().fireChannelReadComplete();
+                // Schedule next read on event loop to avoid stack overflow from
+                // synchronous CompletableFuture completion
+                if (isActive() && config().isAutoRead()) {
+                    doBeginRead();
+                }
+            });
         }).exceptionally(t -> {
             readInFlight.set(false);
-//            E4allClient.LOGGER.info("error reading", t);
-            if (!closed) {
-                pipeline().fireExceptionCaught(t);
-            }
+            eventLoop().execute(() -> {
+                if (!closed) {
+                    pipeline().fireExceptionCaught(t);
+                }
+            });
             return null;
         });
     }
@@ -156,22 +170,31 @@ public class DialtoneChannel extends AbstractChannel {
                     byte[] arr = new byte[buf.readableBytes()];
                     buf.readBytes(arr, 0, buf.readableBytes());
                     stream.writeIrohStreamByteArray(arr, 0, arr.length).thenAccept(nothing -> {
-                        in.remove();
-                        doWriteNext(in);
+                        // Dispatch back to event loop — ChannelOutboundBuffer is not thread-safe
+                        eventLoop().execute(() -> {
+                            in.remove();
+                            doWriteNext(in);
+                        });
                     }).exceptionally(t -> {
-                        in.remove(t);
-                        writeInFlight.set(false);
+                        eventLoop().execute(() -> {
+                            in.remove(t);
+                            writeInFlight.set(false);
+                        });
                         return null;
                     });
                 } else {
                     final int pos = byteBuffer.position();
                     final int rem = byteBuffer.remaining();
                     stream.writeIrohStreamByteBuffer(byteBuffer, pos, rem).thenAccept(nothing -> {
-                        in.remove();
-                        doWriteNext(in);
+                        eventLoop().execute(() -> {
+                            in.remove();
+                            doWriteNext(in);
+                        });
                     }).exceptionally(t -> {
-                        in.remove(t);
-                        writeInFlight.set(false);
+                        eventLoop().execute(() -> {
+                            in.remove(t);
+                            writeInFlight.set(false);
+                        });
                         return null;
                     });
                 }
@@ -226,14 +249,16 @@ public class DialtoneChannel extends AbstractChannel {
                                 connection = conn;
                                 conn.openBi().thenAccept(bidi -> {
                                     stream = bidi;
-                                    pipeline().fireChannelActive();
-                                    safeSetSuccess(promise);
+                                    eventLoop().execute(() -> {
+                                        pipeline().fireChannelActive();
+                                        safeSetSuccess(promise);
+                                    });
                                 }).exceptionally(t -> {
-                                    safeSetFailure(promise, annotateConnectException(t, remoteAddress));
+                                    eventLoop().execute(() -> safeSetFailure(promise, annotateConnectException(t, remoteAddress)));
                                     return null;
                                 });
                             }).exceptionally(t -> {
-                                safeSetFailure(promise, annotateConnectException(t, remoteAddress));
+                                eventLoop().execute(() -> safeSetFailure(promise, annotateConnectException(t, remoteAddress)));
                                 return null;
                             });
                 } else {
@@ -245,6 +270,3 @@ public class DialtoneChannel extends AbstractChannel {
         }
     }
 }
-
-
-

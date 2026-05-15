@@ -141,7 +141,10 @@ public abstract class ShareToLanScreenMixin extends Screen {
                         break;
                     } catch (NoSuchMethodException ignored) {}
                 }
-                return (Button) buildMethod.invoke(builder);
+                if (buildMethod != null) {
+                    return (Button) buildMethod.invoke(builder);
+                }
+                // buildMethod not found — fall through to legacy constructor
             }
         } catch (Exception ignored) {}
 

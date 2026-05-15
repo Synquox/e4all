@@ -52,7 +52,7 @@ public class DialtoneServerChannel extends AbstractServerChannel {
             public void resolve(String addr) {
                 if (addr != null) {
                     E4allClient.LOGGER.info("got new session ticket");
-                    pipeline().fireUserEventTriggered(new DialtoneAddress(addr));
+                    eventLoop().execute(() -> pipeline().fireUserEventTriggered(new DialtoneAddress(addr)));
                 }
             }
 
@@ -65,25 +65,37 @@ public class DialtoneServerChannel extends AbstractServerChannel {
 
     @Override
     protected void doClose() {
+        if (closed) {
+            return;
+        }
         closed = true;
+        final Thread dispatcherRef = dispatcher;
+        dispatcher = null;
         try {
             if (endpoint != null) {
-                endpoint.closeAsync().thenRun(() -> {
+                final Endpoint endpointRef = endpoint;
+                endpoint = null;
+                endpointRef.closeAsync().thenRun(() -> {
                     try {
-                        endpoint.close();
+                        endpointRef.close();
                     } catch (Throwable e) {
                         E4allClient.LOGGER.warn("Error during endpoint close", e);
                     }
-                    endpoint = null;
+                    if (dispatcherRef != null) {
+                        dispatcherRef.interrupt();
+                    }
                 });
+            } else {
+                if (dispatcherRef != null) {
+                    dispatcherRef.interrupt();
+                }
             }
         } catch (Throwable e) {
             E4allClient.LOGGER.warn("Error during async endpoint close", e);
             endpoint = null;
-        }
-        if (dispatcher != null) {
-            dispatcher.interrupt();
-            dispatcher = null;
+            if (dispatcherRef != null) {
+                dispatcherRef.interrupt();
+            }
         }
     }
 
@@ -92,27 +104,30 @@ public class DialtoneServerChannel extends AbstractServerChannel {
         endpoint.accept().thenAccept(preconn -> {
             E4allClient.LOGGER.info("preconn accepted, dialtone child registered");
             var channel = new DialtoneChannel(this);
-            pipeline().fireChannelRead(channel);
-            pipeline().fireChannelReadComplete();
+            // All pipeline events must be dispatched on the event loop thread
+            eventLoop().execute(() -> {
+                pipeline().fireChannelRead(channel);
+                pipeline().fireChannelReadComplete();
+            });
             preconn.thenAccept(conn -> {
                 E4allClient.LOGGER.info("conn accepted, dialtone child pre-active");
                 channel.connection = conn;
                 conn.acceptBi().thenAccept(bidi -> {
                     E4allClient.LOGGER.info("bidi accepted, dialtone child active");
                     channel.stream = bidi;
-                    channel.pipeline().fireChannelActive();
+                    channel.eventLoop().execute(() -> channel.pipeline().fireChannelActive());
                 }).exceptionally(biErr -> {
                     E4allClient.LOGGER.warn("Failed to accept bidirectional stream", biErr);
-                    channel.pipeline().fireChannelInactive();
+                    channel.eventLoop().execute(() -> channel.pipeline().fireChannelInactive());
                     return null;
                 });
             }).exceptionally(e -> {
-                channel.pipeline().fireChannelInactive();
-                pipeline().fireExceptionCaught(e);
+                channel.eventLoop().execute(() -> channel.pipeline().fireChannelInactive());
+                eventLoop().execute(() -> pipeline().fireExceptionCaught(e));
                 return null;
             });
         }).exceptionally(e -> {
-            pipeline().fireExceptionCaught(e);
+            eventLoop().execute(() -> pipeline().fireExceptionCaught(e));
             return null;
         });
     }
@@ -129,9 +144,6 @@ public class DialtoneServerChannel extends AbstractServerChannel {
 
     @Override
     public boolean isActive() {
-        return endpoint != null;
+        return !closed && endpoint != null;
     }
 }
-
-
-

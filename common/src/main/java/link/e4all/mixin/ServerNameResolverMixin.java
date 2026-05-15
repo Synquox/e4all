@@ -19,6 +19,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Hashtable;
 import java.util.Optional;
 
@@ -35,6 +36,7 @@ public class ServerNameResolverMixin {
             environment.put("java.naming.factory.initial", "com.sun.jndi.dns.DnsContextFactory");
             environment.put("java.naming.provider.url", "dns:");
             environment.put("com.sun.jndi.dns.timeout.retries", "1");
+            environment.put("com.sun.jndi.dns.timeout.initial", "5000");
             dirContext = new InitialDirContext(environment);
             return serverAddress -> {
                 var inner = innerHandler.lookupRedirect(serverAddress);
@@ -56,7 +58,8 @@ public class ServerNameResolverMixin {
                                         E4allClient.LOGGER.warn("Ignoring resolver addr {} as it's not a suffix of the target address", resolverAddr);
                                     }
                                     var request = HttpRequest
-                                            .newBuilder(new URI(String.format("https://" + resolverAddr + "/.well-known/dialtone_ticket/" + serverAddress.getHost())))
+                                            .newBuilder(new URI("https", resolverAddr, "/.well-known/dialtone_ticket/" + serverAddress.getHost(), null))
+                                            .timeout(Duration.ofSeconds(5))
                                             .build();
                                     E4allClient.LOGGER.info("req: {}", request);
                                     var response = E4ALL_HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());

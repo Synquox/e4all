@@ -285,6 +285,8 @@ public class QuiclimeSession {
                     channelClass = NioDatagramChannel.class;
                 } else if (mig.isIoType(KQueueIoHandler.class)) {
                     channelClass = KQueueDatagramChannel.class;
+                } else {
+                    throw new RuntimeException("Unknown IoHandler type in MultiThreadIoEventLoopGroup: " + mig);
                 }
             } else {
                 throw new RuntimeException("Unknown EventLoopGroup " + group.getClass().getName());
@@ -297,7 +299,7 @@ public class QuiclimeSession {
                     .addListener(datagramChannelFuture -> {
                 if (!datagramChannelFuture.isSuccess()) {
                     fail(datagramChannelFuture.cause());
-                    throw new RuntimeException(datagramChannelFuture.cause());
+                    return;
                 }
                 datagramChannel = (DatagramChannel) ((ChannelFuture) datagramChannelFuture).channel();
                 QuicChannel.newBootstrap(datagramChannel)
@@ -327,12 +329,17 @@ public class QuiclimeSession {
                                         var reconnectThread = new Thread(() -> {
                                             try {
                                                 Thread.sleep(delay * 1000L);
-                                                if (state == State.RECONNECTING) {
-                                                    // Clean up old channels before reconnecting
+                                                State currentState = state;
+                                                if (currentState == State.RECONNECTING) {
                                                     QuiclimeSession.this.cleanupChannels();
                                                     start();
+                                                } else {
+                                                    LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
                                                 }
                                             } catch (InterruptedException ignored) {
+                                                state = State.STOPPED;
+                                            } catch (Throwable e) {
+                                                LOGGER.error("Failed to reconnect", e);
                                                 state = State.STOPPED;
                                             }
                                         }, "e4all_minecraft-reconnect");
@@ -355,7 +362,7 @@ public class QuiclimeSession {
                         .addListener(quicChannelFuture -> {
                     if (!quicChannelFuture.isSuccess()) {
                         fail(quicChannelFuture.cause());
-                        throw new RuntimeException(quicChannelFuture.cause());
+                        return;
                     }
                     quicChannel = (QuicChannel) quicChannelFuture.get();
 
@@ -402,7 +409,7 @@ public class QuiclimeSession {
                                             if (Config.INSTANCE.offlineMode.value() && !Config.INSTANCE.offlineWarningShown.value()) {
                                                 Config.INSTANCE.offlineWarningShown.setValue(true, true);
                                                 LOGGER.warn("e4all: Offline mode enabled — Microsoft authentication will be disabled for LAN connections");
-                                                Mirror.addMessage(Mirror.translatable("text.e4mc_minecraft.offlineModeWarning"));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4mc_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
                                             }
                                         }
                                     }
@@ -445,7 +452,7 @@ public class QuiclimeSession {
                                                     .addListener(dialtoneChannelFuture -> {
                                                         if (!dialtoneChannelFuture.isSuccess()) {
                                                             fail(dialtoneChannelFuture.cause());
-                                                            throw new RuntimeException(dialtoneChannelFuture.cause());
+                                                            return;
                                                         }
                                                         dialtoneChannel = (DialtoneServerChannel) dialtoneChannelFuture.get();
                                                     });
@@ -457,7 +464,7 @@ public class QuiclimeSession {
                     }).addListener(it -> {
                         if (!it.isSuccess()) {
                             fail(it.cause());
-                            throw new RuntimeException(it.cause());
+                            return;
                         }
                         QuicStreamChannel streamChannel = (QuicStreamChannel) it.getNow();
                         LOGGER.info("control channel open: {}", streamChannel);

@@ -17,8 +17,7 @@ public class PoisonPill {
                                 || line.startsWith("HostUrl=https://cdn.modrinth.com/")
                                 || line.startsWith("HostUrl=https://edge.forgecdn.net/")
                                 || line.startsWith("HostUrl=https://maven.is-quite.gay/")
-                                || line.startsWith("HostUrl=https://github.com/")
-                                || line.startsWith("HostUrl=https://github.com/Synquox/e4all/"))) {
+                                || line.startsWith("HostUrl=https://github.com/"))) {
                             return false;
                         }
                     }

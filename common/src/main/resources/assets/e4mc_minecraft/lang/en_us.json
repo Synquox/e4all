@@ -9,7 +9,7 @@
     "text.e4mc_minecraft.offlineMode": "Online Mode: ",
     "text.e4mc_minecraft.offlineModeEnabled": "Offline mode enabled — cracked clients can now join",
     "text.e4mc_minecraft.offlineModeDisabled": "Offline mode disabled — Microsoft authentication required",
-    "text.e4mc_minecraft.offlineModeWarning": "§c⚠ WARNING: Offline Mode is enabled! Authentication is disabled, so anyone with any username can join. This cannot be undone for this session.",
+    "text.e4mc_minecraft.offlineModeWarning": "⚠ WARNING: Offline Mode is enabled! Authentication is disabled, so anyone with any username can join. This cannot be undone for this session.",
     "text.e4mc_minecraft.offlineModeOn": "ON",
     "text.e4mc_minecraft.offlineModeOff": "OFF",
     "text.e4mc_minecraft.onlineMode": "Online Mode: ",

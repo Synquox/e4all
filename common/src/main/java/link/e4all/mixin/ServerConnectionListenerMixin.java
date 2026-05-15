@@ -5,6 +5,8 @@ import io.netty.channel.EventLoopGroup;
 import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.QuiclimeSession;
+import link.e4all.VoiceChatBridge;
+import link.e4all.VoiceChatBridgeInitializer;
 import net.minecraft.server.network.ServerConnectionListener;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -50,27 +52,29 @@ public abstract class ServerConnectionListenerMixin {
         }
 
         if (Config.INSTANCE.hostEnabled.value()) {
-            // Clean up any stale session before starting a new one
-            QuiclimeSession existing = E4allClient.session;
-            if (existing != null) {
-                if (existing.state == QuiclimeSession.State.UNHEALTHY
-                        || existing.state == QuiclimeSession.State.STOPPED) {
-                    E4allClient.LOGGER.info("e4all: Cleaning up stale session (state: {})", existing.state);
-                    E4allClient.session = null;
-                } else if (existing.state == QuiclimeSession.State.STARTING
-                        || existing.state == QuiclimeSession.State.STARTED
-                        || existing.state == QuiclimeSession.State.RECONNECTING) {
-                    // Session is still active or reconnecting — don't create a new one
-                    E4allClient.LOGGER.info("e4all: Session already active (state: {}), skipping new tunnel creation", existing.state);
-                    e4mc$childHandler = null;
-                    e4mc$group = null;
-                    return;
+            synchronized (E4allClient.SESSION_LOCK) {
+                QuiclimeSession existing = E4allClient.session;
+                if (existing != null) {
+                    if (existing.state == QuiclimeSession.State.UNHEALTHY
+                            || existing.state == QuiclimeSession.State.STOPPED) {
+                        E4allClient.LOGGER.info("e4all: Cleaning up stale session (state: {})", existing.state);
+                        E4allClient.session = null;
+                    } else if (existing.state == QuiclimeSession.State.STARTING
+                            || existing.state == QuiclimeSession.State.STARTED
+                            || existing.state == QuiclimeSession.State.RECONNECTING) {
+                        // Session is still active or reconnecting — don't create a new one
+                        E4allClient.LOGGER.info("e4all: Session already active (state: {}), skipping new tunnel creation", existing.state);
+                        e4mc$childHandler = null;
+                        e4mc$group = null;
+                        return;
+                    }
                 }
+                E4allClient.session = new QuiclimeSession(new VoiceChatBridgeInitializer(e4mc$childHandler, true), e4mc$group);
+                VoiceChatBridge.resetCachedPort(); // Re-detect SVC on each session start
+                e4mc$childHandler = null;
+                e4mc$group = null;
+                E4allClient.session.startAsync();
             }
-            E4allClient.session = new QuiclimeSession(e4mc$childHandler, e4mc$group);
-            e4mc$childHandler = null;
-            e4mc$group = null;
-            E4allClient.session.startAsync();
         } else {
             e4mc$childHandler = null;
             e4mc$group = null;
@@ -79,10 +83,12 @@ public abstract class ServerConnectionListenerMixin {
 
     @Inject(method = "stop", at = @At(value = "HEAD"))
     private void interceptStop(CallbackInfo ci) {
-        QuiclimeSession session = E4allClient.session;
-        if ((session != null) && (session.state != QuiclimeSession.State.STOPPED)) {
-            session.stop();
-            E4allClient.session = null;
+        synchronized (E4allClient.SESSION_LOCK) {
+            QuiclimeSession session = E4allClient.session;
+            if ((session != null) && (session.state != QuiclimeSession.State.STOPPED)) {
+                session.stop();
+                E4allClient.session = null;
+            }
         }
     }
 }

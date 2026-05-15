@@ -19,6 +19,10 @@ public class DialtoneAmbientSession {
     private DialtoneAmbientSession() {}
 
     public void start() throws Exception {
+        if (endpoint != null || dispatcher != null) {
+            E4allClient.LOGGER.info("Cleaning up stale DialtoneAmbientSession before restart");
+            stop();
+        }
         E4allClient.LOGGER.info("Starting DialtoneAmbientSession!");
         this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
         this.dispatcher = new Thread(() -> {
@@ -39,21 +43,36 @@ public class DialtoneAmbientSession {
     }
 
     public void stop() {
-        if (endpoint != null) {
+        final Endpoint endpointRef = endpoint;
+        final Thread dispatcherRef = dispatcher;
+        endpoint = null;
+        dispatcher = null;
+
+        if (endpointRef != null) {
             try {
-                endpoint.closeAsync().join();
-                endpoint.close();
+                endpointRef.closeAsync().thenRun(() -> {
+                    try {
+                        endpointRef.close();
+                    } catch (Throwable e) {
+                        E4allClient.LOGGER.warn("Error during endpoint final close", e);
+                    }
+                    if (dispatcherRef != null) {
+                        dispatcherRef.interrupt();
+                    }
+                });
             } catch (Throwable e) {
                 E4allClient.LOGGER.warn("Error closing DialtoneAmbientSession endpoint", e);
+                try {
+                    endpointRef.close();
+                } catch (Throwable e2) {
+                    E4allClient.LOGGER.warn("Error during fallback endpoint close", e2);
+                }
+                if (dispatcherRef != null) {
+                    dispatcherRef.interrupt();
+                }
             }
-            endpoint = null;
-        }
-        if (dispatcher != null) {
-            dispatcher.interrupt();
-            dispatcher = null;
+        } else if (dispatcherRef != null) {
+            dispatcherRef.interrupt();
         }
     }
 }
-
-
-
