@@ -13,6 +13,10 @@ subprojects {
 
     loom {
         silentMojangMappingsLicense()
+        mixin {
+            defaultRefmapName = "e4all.refmap.json"
+            useLegacyMixinAp = true
+        }
     }
 
     dependencies {

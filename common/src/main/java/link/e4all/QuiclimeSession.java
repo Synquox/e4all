@@ -200,6 +200,7 @@ public class QuiclimeSession {
     private DatagramChannel datagramChannel;
     private QuicChannel quicChannel;
     private DialtoneServerChannel dialtoneChannel;
+    private boolean dialtoneBindingStarted = false;
     private ScheduledFuture<?> keepaliveFuture;
 
     public QuiclimeSession(ChannelHandler handler, EventLoopGroup group) {
@@ -438,7 +439,8 @@ public class QuiclimeSession {
                                                 break;
                                             }
                                         }
-                                        if (hasDialtoneSidecar && Config.INSTANCE.dialtoneHostEnabled.value()) {
+                                        if (hasDialtoneSidecar && Config.INSTANCE.dialtoneHostEnabled.value() && dialtoneChannel == null && !dialtoneBindingStarted) {
+                                            dialtoneBindingStarted = true;
                                             new ServerBootstrap()
                                                     .channel(DialtoneServerChannel.class)
                                                     .handler(new ChannelInboundHandlerAdapter() {
@@ -467,9 +469,11 @@ public class QuiclimeSession {
                                                                     ((Channel) dialtoneChannelFuture.get()).close();
                                                                 }
                                                             } catch (Exception ignored) {}
+                                                            dialtoneBindingStarted = false;
                                                             return;
                                                         }
                                                         if (!dialtoneChannelFuture.isSuccess()) {
+                                                            dialtoneBindingStarted = false;
                                                             fail(dialtoneChannelFuture.cause());
                                                             return;
                                                         }
@@ -563,6 +567,7 @@ public class QuiclimeSession {
             LOGGER.warn("Error closing dialtone channel during cleanup", e);
         }
         dialtoneChannel = null;
+        dialtoneBindingStarted = false;
         try {
             if (quicChannel != null && quicChannel.isOpen()) {
                 quicChannel.close();

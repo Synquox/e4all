@@ -1,6 +1,7 @@
 {
   "required": true,
   "package": "link.e4all.mixin",
+  "refmap": "e4all.refmap.json",
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
   "mixins": [

@@ -5,6 +5,7 @@ import link.e4all.E4allClient;
 import link.e4all.Mirror;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.ShareToLanScreen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -12,21 +13,18 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.lang.reflect.Method;
-
 /**
  * Mixin to inject an "Offline Mode" toggle button into the Share to LAN screen.
- * Uses reflection to call addRenderableWidget (name varies across MC versions)
- * to add a toggle button that controls the offline mode config.
+ *
+ * Uses direct method calls (Button.builder, addRenderableWidget) instead of
+ * reflection so that Architectury Loom's transformer can properly remap them
+ * to SRG names for Forge at build time. String-based reflection cannot be
+ * remapped and silently fails on Forge's SRG runtime.
  *
  * When offline mode is first enabled and the warning hasn't been shown yet,
  * a one-time warning message is displayed in chat when the LAN server opens.
  */
-@Mixin(targets = {
-    "net.minecraft.client.gui.screens.ShareToLanScreen",
-    "net.minecraft.client.gui.screen.OpenToLanScreen",
-    "net.minecraft.class_436"
-})
+@Mixin(ShareToLanScreen.class)
 public abstract class ShareToLanScreenMixin extends Screen {
 
     protected ShareToLanScreenMixin(Component component) {
@@ -36,25 +34,31 @@ public abstract class ShareToLanScreenMixin extends Screen {
     @Unique
     private Button e4all$offlineModeButton;
 
-    @Inject(method = "init", at = @At("TAIL"), require = 0)
+    @Inject(method = "init", at = @At("TAIL"))
     private void e4all$addOfflineModeButton(CallbackInfo ci) {
         try {
             boolean currentValue = Config.INSTANCE.offlineMode.value();
             Component buttonText = e4all$getButtonText(currentValue);
 
-            // Create a simple Button — compatible across all MC versions >=1.18
-            // The button is placed below the existing buttons
-            // Button.builder was added in 1.19.3; for older versions, use constructor
-            Button button = e4all$createButton(
-                this.width / 2 - 155, this.height - 56, 150, 20,
-                buttonText
-            );
+            Button button;
+            try {
+                // MC 1.19.4+ — direct call so Architectury Transformer can remap for Forge
+                button = Button.builder(buttonText, this::e4all$onToggle)
+                    .bounds(this.width / 2 - 155, this.height - 56, 150, 20)
+                    .build();
+            } catch (NoSuchMethodError e) {
+                // MC 1.18–1.19.3 — Button.builder doesn't exist, use legacy constructor
+                button = e4all$createButtonLegacy(
+                    this.width / 2 - 155, this.height - 56, 150, 20,
+                    buttonText
+                );
+            }
 
             this.e4all$offlineModeButton = button;
 
-            // Try to add the button using the version-appropriate method
-            e4all$addWidget(button);
-        } catch (Exception e) {
+            // Direct call — Architectury Transformer remaps this to the correct SRG name
+            this.addRenderableWidget(button);
+        } catch (Throwable e) {
             E4allClient.LOGGER.warn("e4all: Failed to add offline mode button to LAN screen", e);
         }
     }
@@ -77,137 +81,19 @@ public abstract class ShareToLanScreenMixin extends Screen {
     }
 
     /**
-     * Creates a Button using reflection to handle version differences.
-     * MC 1.19.4+: Button.builder(text, onPress).bounds(x, y, w, h).build()
-     * MC 1.18-1.19.3: new Button(x, y, w, h, text, onPress)
+     * Legacy button constructor for MC 1.18–1.19.3 where Button.builder() doesn't exist.
+     * Uses reflection since the constructor was removed in newer versions and can't be
+     * referenced directly when compiling against 1.20.2.
      */
     @Unique
-    private Button e4all$createButton(int x, int y, int width, int height, Component text) {
-        // Try modern Button.builder first (1.19.4+)
-        try {
-            Method builderMethod = null;
-            for (String name : new String[]{"builder", "method_46430", "m_252437_"}) {
-                try {
-                    builderMethod = Button.class.getMethod(name, Component.class, Button.OnPress.class);
-                    break;
-                } catch (NoSuchMethodException ignored) {}
-            }
-            if (builderMethod != null) {
-                Object builder = builderMethod.invoke(null, text, (Button.OnPress) this::e4all$onToggle);
-                Method boundsMethod = null;
-                for (String name : new String[]{"bounds", "dimensions", "method_46432", "m_253166_"}) {
-                    try {
-                        boundsMethod = builder.getClass().getMethod(name, int.class, int.class, int.class, int.class);
-                        break;
-                    } catch (NoSuchMethodException ignored) {}
-                }
-                
-                if (boundsMethod != null) {
-                    builder = boundsMethod.invoke(builder, x, y, width, height);
-                } else {
-                    // MC 1.20+ separated bounds into pos and size
-                    Method posMethod = null;
-                    for (String name : new String[]{"pos", "method_46434", "m_252582_", "position"}) {
-                        try { posMethod = builder.getClass().getMethod(name, int.class, int.class); break; } catch (NoSuchMethodException ignored) {}
-                    }
-                    if (posMethod != null) {
-                        builder = posMethod.invoke(builder, x, y);
-                    }
-                    
-                    Method sizeMethod = null;
-                    for (String name : new String[]{"size", "method_46435", "m_253249_", "dimensions"}) {
-                        try { sizeMethod = builder.getClass().getMethod(name, int.class, int.class); break; } catch (NoSuchMethodException ignored) {}
-                    }
-                    if (sizeMethod != null) {
-                        builder = sizeMethod.invoke(builder, width, height);
-                    } else {
-                        // Fallback to width only if size is missing
-                        Method widthMethod = null;
-                        for (String name : new String[]{"width", "method_46436", "m_252758_"}) {
-                            try { widthMethod = builder.getClass().getMethod(name, int.class); break; } catch (NoSuchMethodException ignored) {}
-                        }
-                        if (widthMethod != null) builder = widthMethod.invoke(builder, width);
-                    }
-                }
-                Method buildMethod = null;
-                for (String name : new String[]{"build", "method_46431", "m_253018_"}) {
-                    try {
-                        buildMethod = builder.getClass().getMethod(name);
-                        break;
-                    } catch (NoSuchMethodException ignored) {}
-                }
-                if (buildMethod != null) {
-                    return (Button) buildMethod.invoke(builder);
-                }
-                // buildMethod not found — fall through to legacy constructor
-            }
-        } catch (Exception ignored) {}
-
-        // Try legacy constructor (1.18-1.19.3)
+    private Button e4all$createButtonLegacy(int x, int y, int width, int height, Component text) {
         try {
             var constructor = Button.class.getConstructor(
                 int.class, int.class, int.class, int.class, Component.class, Button.OnPress.class
             );
             return constructor.newInstance(x, y, width, height, text, (Button.OnPress) this::e4all$onToggle);
-        } catch (Exception ignored) {}
-
-        throw new RuntimeException("e4all: Could not create button for any known MC version");
-    }
-
-    /**
-     * Adds a widget using the version-appropriate method name.
-     * addRenderableWidget (1.18+), method_25411 (intermediary), m_142416_ (SRG)
-     */
-    @Unique
-    private void e4all$addWidget(Button button) {
-        String[] methodNames = {
-            "addRenderableWidget",
-            "addDrawableChild",
-            "addButton",
-            "m_142416_", // SRG
-            "method_37063", // Intermediary addDrawableChild/addRenderableWidget
-            "method_25411", // Intermediary addButton
-            "m_142414_", // Forge/NeoForge
-            "func_230480_a_" // Old SRG
-        };
-        for (String name : methodNames) {
-            try {
-                // Try with GuiEventListener (common for addRenderableWidget)
-                try {
-                    Method method = Screen.class.getDeclaredMethod(name, net.minecraft.client.gui.components.events.GuiEventListener.class);
-                    method.setAccessible(true);
-                    method.invoke(this, button);
-                    return;
-                } catch (NoSuchMethodException ignored) {}
-
-                // Try with Renderable/Widget (varies by MC version, use Class.forName to avoid load-time crash)
-                for (String renderableClassName : new String[]{
-                    "net.minecraft.client.gui.components.Renderable",
-                    "net.minecraft.client.gui.components.Widget",
-                    "net.minecraft.client.gui.Drawable",
-                    "net.minecraft.class_4068"
-                }) {
-                    try {
-                        Class<?> renderableClass = Class.forName(renderableClassName);
-                        Method method = Screen.class.getDeclaredMethod(name, renderableClass);
-                        method.setAccessible(true);
-                        method.invoke(this, button);
-                        return;
-                    } catch (ClassNotFoundException | NoSuchMethodException ignored) {}
-                }
-
-                // Try with Widget (newer versions)
-                for (Method method : Screen.class.getDeclaredMethods()) {
-                    if (method.getName().equals(name) && method.getParameterCount() == 1) {
-                        method.setAccessible(true);
-                        method.invoke(this, button);
-                        return;
-                    }
-                }
-            } catch (Exception ignored) {}
+        } catch (Exception e) {
+            throw new RuntimeException("e4all: Could not create button for any known MC version", e);
         }
-        E4allClient.LOGGER.warn("e4all: Could not find addRenderableWidget method in any known form");
     }
 }
-
-
