@@ -1,5 +1,6 @@
 package link.e4all.mixin;
 
+import link.e4all.Config;
 import link.e4all.DialtoneConnectionExtensions;
 import link.e4all.dialtone.DialtoneAddress;
 import net.minecraft.client.multiplayer.ClientHandshakePacketListenerImpl;
@@ -35,6 +36,26 @@ public class ClientHandshakePacketListenerImplMixin {
             return ((DialtoneConnectionExtensions) connection).e4mc$exportKeyingMaterial("EXPERIMENTAL mojang authentication".getBytes(StandardCharsets.UTF_8), new byte[0], 20);
         }
         return Crypt.digestData(string, publicKey, secretKey);
+    }
+
+    @Redirect(
+        method = "handleHello",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/mojang/authlib/minecraft/MinecraftSessionService;joinServer(Ljava/util/UUID;Ljava/lang/String;Ljava/lang/String;)V"
+        ),
+        require = 0
+    )
+    private void e4all$skipJoinServer(
+        com.mojang.authlib.minecraft.MinecraftSessionService service,
+        java.util.UUID uuid,
+        String token,
+        String serverId
+    ) throws com.mojang.authlib.exceptions.AuthenticationException {
+        if (connection.getRemoteAddress() instanceof DialtoneAddress && Config.INSTANCE.offlineMode.value()) {
+            return;
+        }
+        service.joinServer(uuid, token, serverId);
     }
 }
 

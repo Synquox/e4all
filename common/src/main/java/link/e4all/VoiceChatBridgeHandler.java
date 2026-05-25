@@ -196,28 +196,7 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
      * Uses shared reflection helpers from VoiceChatPacketHelper.
      */
     private Object buildSecretPacket(byte[] newData) {
-        VoiceChatPacketHelper.initReflection();
-        try {
-            Object rl = VoiceChatPacketHelper.makeResourceLocation("voicechat", "secret");
-            ByteBuf rawBuf = Unpooled.wrappedBuffer(newData);
-
-            Class<?> friendlyBufClass = Class.forName(VoiceChatPacketHelper.findFriendlyByteBufClassName());
-            Object friendlyBuf = friendlyBufClass.getConstructor(ByteBuf.class).newInstance(rawBuf);
-
-            Class<?> packetClass = VoiceChatPacketHelper.findS2CPayloadClass();
-            for (java.lang.reflect.Constructor<?> ctor : packetClass.getConstructors()) {
-                Class<?>[] params = ctor.getParameterTypes();
-                if (params.length == 2) {
-                    try {
-                        return ctor.newInstance(rl, friendlyBuf);
-                    } catch (Exception ignored) {}
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            LOGGER.warn("Failed to build SecretPacket", e);
-            return null;
-        }
+        return VoiceChatPacketHelper.buildCustomPayloadPacket("voicechat", "secret", newData, true);
     }
 
     /**

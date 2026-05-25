@@ -297,6 +297,12 @@ public class QuiclimeSession {
                     .handler(codec)
                     .bind(0)
                     .addListener(datagramChannelFuture -> {
+                if (state == State.STOPPING || state == State.STOPPED) {
+                    try {
+                        ((ChannelFuture) datagramChannelFuture).channel().close();
+                    } catch (Exception ignored) {}
+                    return;
+                }
                 if (!datagramChannelFuture.isSuccess()) {
                     fail(datagramChannelFuture.cause());
                     return;
@@ -360,14 +366,19 @@ public class QuiclimeSession {
                         .remoteAddress(new InetSocketAddress(InetAddress.getByName(relayInfo.host), relayInfo.port))
                         .connect()
                         .addListener(quicChannelFuture -> {
+                    if (state == State.STOPPING || state == State.STOPPED) {
+                        try {
+                            if (quicChannelFuture.isSuccess()) {
+                                ((QuicChannel) quicChannelFuture.get()).close();
+                            }
+                        } catch (Exception ignored) {}
+                        return;
+                    }
                     if (!quicChannelFuture.isSuccess()) {
                         fail(quicChannelFuture.cause());
                         return;
                     }
                     quicChannel = (QuicChannel) quicChannelFuture.get();
-
-                    // Start QUIC-level keepalive pings to prevent idle timeout
-                    startKeepalive(quicChannel);
 
                     quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                             new ChannelInitializer<QuicStreamChannel>() {
@@ -450,6 +461,14 @@ public class QuiclimeSession {
                                                     .localAddress(new DialtoneAddress(""))
                                                     .bind()
                                                     .addListener(dialtoneChannelFuture -> {
+                                                        if (state == State.STOPPING || state == State.STOPPED) {
+                                                            try {
+                                                                if (dialtoneChannelFuture.isSuccess()) {
+                                                                    ((Channel) dialtoneChannelFuture.get()).close();
+                                                                }
+                                                            } catch (Exception ignored) {}
+                                                            return;
+                                                        }
                                                         if (!dialtoneChannelFuture.isSuccess()) {
                                                             fail(dialtoneChannelFuture.cause());
                                                             return;
@@ -462,12 +481,24 @@ public class QuiclimeSession {
                             });
                         }
                     }).addListener(it -> {
+                        if (state == State.STOPPING || state == State.STOPPED) {
+                            try {
+                                if (it.isSuccess()) {
+                                    ((Channel) it.getNow()).close();
+                                }
+                            } catch (Exception ignored) {}
+                            return;
+                        }
                         if (!it.isSuccess()) {
                             fail(it.cause());
                             return;
                         }
                         QuicStreamChannel streamChannel = (QuicStreamChannel) it.getNow();
                         LOGGER.info("control channel open: {}", streamChannel);
+
+                        // Start QUIC-level keepalive pings on the control stream to prevent idle timeout
+                        startKeepalive(streamChannel);
+
                         streamChannel
                                 .writeAndFlush(new ControlMessageCodec.ProbeCapabilitiesMessageServerbound())
                                 .addListener(ignored -> LOGGER.info("probing capabilities"));
@@ -484,10 +515,12 @@ public class QuiclimeSession {
         }
     }
 
-    private void startKeepalive(QuicChannel channel) {
+    private void startKeepalive(QuicStreamChannel streamChannel) {
         cancelKeepalive();
-        keepaliveFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-                channel.flush();
+        keepaliveFuture = streamChannel.eventLoop().scheduleAtFixedRate(() -> {
+            if (streamChannel.isActive()) {
+                streamChannel.writeAndFlush(new ControlMessageCodec.ProbeCapabilitiesMessageServerbound());
+            }
         }, KEEPALIVE_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 

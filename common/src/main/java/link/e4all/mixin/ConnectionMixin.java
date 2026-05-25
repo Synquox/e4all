@@ -118,14 +118,14 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     // mismatches during the async QUIC handshake.
     @Inject(method = "/^(setupCompression|setCompressionThreshold|method_10760|m_129514_)$/", at = @At("HEAD"), cancellable = true, require = 0)
     private void killDoubleCompression(int threshold, boolean validate, CallbackInfo ci) {
-        if (channel instanceof DialtoneChannel) {
+        if (channel instanceof DialtoneChannel || (channel != null && channel.getClass().getName().contains("QuicStreamChannel"))) {
             ci.cancel();
         }
     }
 
     @Surrogate
     private void killDoubleCompression(int threshold, CallbackInfo ci) {
-        if (channel instanceof DialtoneChannel) {
+        if (channel instanceof DialtoneChannel || (channel != null && channel.getClass().getName().contains("QuicStreamChannel"))) {
             ci.cancel();
         }
     }

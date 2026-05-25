@@ -46,6 +46,8 @@ public class VoiceChatPacketHelper {
 
     // For 1.20.2+ payload system
     private static boolean usePayloadSystem = false;
+    private static Class<?> discardedPayloadClass;
+    private static Constructor<?> discardedPayloadConstructor;
 
     // Log once flags to prevent log spam from high-frequency voice packets
     private static final AtomicBoolean payloadWarningLogged = new AtomicBoolean(false);
@@ -90,16 +92,24 @@ public class VoiceChatPacketHelper {
 
                     // Check if these use the payload system (CustomPacketPayload)
                     try {
-                        Class.forName("net.minecraft.network.protocol.common.custom.CustomPacketPayload");
+                        Class<?> customPacketPayloadClass = Class.forName("net.minecraft.network.protocol.common.custom.CustomPacketPayload");
                         usePayloadSystem = true;
-                        // For 1.20.2+ with payload system, try to find legacy-compatible constructors
+                        
                         try {
-                            s2cPayloadConstructor = s2cPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
+                            discardedPayloadClass = Class.forName("net.minecraft.network.protocol.common.custom.DiscardedPayload");
+                            discardedPayloadConstructor = discardedPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
+                        } catch (Exception e) {
+                            LOGGER.debug("Failed to find DiscardedPayload class or constructor", e);
+                        }
+
+                        // For 1.20.2+ with payload system, try to find constructors taking CustomPacketPayload
+                        try {
+                            s2cPayloadConstructor = s2cPayloadClass.getConstructor(customPacketPayloadClass);
                         } catch (NoSuchMethodException ignored) {
                             s2cPayloadConstructor = null;
                         }
                         try {
-                            c2sPayloadConstructor = c2sPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
+                            c2sPayloadConstructor = c2sPayloadClass.getConstructor(customPacketPayloadClass);
                         } catch (NoSuchMethodException ignored) {
                             c2sPayloadConstructor = null;
                         }
@@ -177,6 +187,34 @@ public class VoiceChatPacketHelper {
     }
 
     /**
+     * Builds a custom payload packet from a channel identifier and raw data bytes.
+     * Works across pre-1.20.2, 1.20.2+, and 1.21+ versions.
+     */
+    public static Object buildCustomPayloadPacket(String namespace, String path, byte[] data, boolean serverToClient) {
+        initReflection();
+        try {
+            Object rl = makeResourceLocation(namespace, path);
+            ByteBuf rawBuf = Unpooled.wrappedBuffer(data);
+            Object friendlyBuf = friendlyByteBufConstructor.newInstance(rawBuf);
+
+            Constructor<?> ctor = serverToClient ? s2cPayloadConstructor : c2sPayloadConstructor;
+            if (ctor != null) {
+                if (usePayloadSystem && discardedPayloadConstructor != null) {
+                    // 1.20.2+ record DiscardedPayload(ResourceLocation id, FriendlyByteBuf data)
+                    Object payload = discardedPayloadConstructor.newInstance(rl, friendlyBuf);
+                    return ctor.newInstance(payload);
+                } else {
+                    // pre-1.20.2 constructor(ResourceLocation, FriendlyByteBuf)
+                    return ctor.newInstance(rl, friendlyBuf);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to build custom payload packet for " + namespace + ":" + path, e);
+        }
+        return null;
+    }
+
+    /**
      * Sends voice chat data through the Minecraft connection as a custom payload packet.
      *
      * For MC 1.20.2+ with the payload system, this constructs the packet via reflection
@@ -188,12 +226,11 @@ public class VoiceChatPacketHelper {
      * @param serverToClient true if sending S2C, false for C2S
      */
     public static void sendVoiceData(Channel channel, byte[] data, boolean serverToClient) {
-        initReflection();
-        try {
-            Constructor<?> ctor = serverToClient ? s2cPayloadConstructor : c2sPayloadConstructor;
-            if (ctor != null) {
-                sendVoiceDataWithConstructor(channel, data, ctor);
-            } else if (usePayloadSystem) {
+        Object packet = buildCustomPayloadPacket("e4all", "vc", data, serverToClient);
+        if (packet != null) {
+            channel.writeAndFlush(packet);
+        } else {
+            if (usePayloadSystem) {
                 // MC 1.20.2+ without legacy constructors — can't send unregistered payloads
                 // through the Minecraft codec. Log once and bail.
                 if (payloadWarningLogged.compareAndSet(false, true)) {
@@ -205,17 +242,7 @@ public class VoiceChatPacketHelper {
                     LOGGER.warn("No suitable constructor found for sending voice data packets");
                 }
             }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to send voice data packet", e);
         }
-    }
-
-    private static void sendVoiceDataWithConstructor(Channel channel, byte[] data, Constructor<?> ctor) throws Exception {
-        Object rl = makeResourceLocation("e4all", "vc");
-        ByteBuf rawBuf = Unpooled.wrappedBuffer(data);
-        Object friendlyBuf = friendlyByteBufConstructor.newInstance(rawBuf);
-        Object packet = ctor.newInstance(rl, friendlyBuf);
-        channel.writeAndFlush(packet);
     }
 
     /**

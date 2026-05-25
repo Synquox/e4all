@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0
+
+- Fixed memory and background thread leaks in Dialtone event loop dispatchers.
+- Fixed asynchronous Netty connection/socket leaks during rapid server shutdowns or restarts.
+- Improved robustness of reflection-based utility methods to prevent startup, command, and login crashes.
+- Restored Simple Voice Chat bridge compatibility on Minecraft 1.20.2+ by implementing fallback DiscardedPayload record serialization.
+
 ## 1.3.0
 
 - Added Simple Voice Chat bridge: voice chat now works over e4all tunneled connections.

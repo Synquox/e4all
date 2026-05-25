@@ -232,33 +232,43 @@ public class Mirror {
     }
 
     public static boolean isSingleplayerOwner(MinecraftServer server, ServerPlayer player) {
-        Class<ServerPlayer> clazz = ServerPlayer.class;
-        Object profile = player.getGameProfile();
-        for (String methodName : NAME_AND_ID_METHOD_NAMES) {
-            try {
-                Method method = clazz.getMethod(methodName);
-                profile = method.invoke(player);
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
+        if (server == null || player == null) return false;
+        try {
+            Class<ServerPlayer> clazz = ServerPlayer.class;
+            Object profile = player.getGameProfile();
+            for (String methodName : NAME_AND_ID_METHOD_NAMES) {
+                try {
+                    Method method = clazz.getMethod(methodName);
+                    profile = method.invoke(player);
+                } catch (Throwable ignored) {}
+            }
+            Class<MinecraftServer> clazz2 = MinecraftServer.class;
+            for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+                try {
+                    Method method = clazz2.getMethod(methodName, profile.getClass());
+                    return (boolean) method.invoke(server, profile);
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.warn("e4all: Failed to check singleplayer owner reflectively", t);
         }
-        Class<MinecraftServer> clazz2 = MinecraftServer.class;
-        for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
-            try {
-                Method method = clazz2.getMethod(methodName, profile.getClass());
-                return (boolean) method.invoke(server, profile);
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
-        }
-        throw new RuntimeException("Could not locate any way to call isSingleplayerOwner!");
+        return false;
     }
 
     public static boolean isSingleplayerOwnerObj(MinecraftServer server, Object maybeProfile) {
-        Class<MinecraftServer> clazz2 = MinecraftServer.class;
-        for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
-            try {
-                Method method = clazz2.getMethod(methodName, maybeProfile.getClass());
-                return (boolean) method.invoke(server, maybeProfile);
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
+        if (server == null || maybeProfile == null) return false;
+        try {
+            Class<MinecraftServer> clazz2 = MinecraftServer.class;
+            for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+                try {
+                    Method method = clazz2.getMethod(methodName, maybeProfile.getClass());
+                    return (boolean) method.invoke(server, maybeProfile);
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.warn("e4all: Failed to check singleplayer owner obj reflectively", t);
         }
-        throw new RuntimeException("Could not locate any way to call isSingleplayerOwner!");
+        return false;
     }
 
     public static void setUsingWhitelist(MinecraftServer server, PlayerList playerList, boolean enabled) {
@@ -269,26 +279,26 @@ public class Mirror {
                 Method method = clazz.getMethod(methodName, boolean.class);
                 method.invoke(server, enabled);
                 return;
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
+            } catch (Throwable ignored) {}
             try {
                 Method method = clazz2.getMethod(methodName, boolean.class);
                 method.invoke(playerList, enabled);
                 return;
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
+            } catch (Throwable ignored) {}
         }
-        throw new RuntimeException("Could not locate any way to call setUsingWhitelist!");
+        E4allClient.LOGGER.warn("e4all: Could not locate setUsingWhitelist method reflectively");
     }
 
     public static void addMessage(Component message) {
         Minecraft.getInstance().execute(() -> {
             try {
                 Minecraft.getInstance().gui.getChat().addMessage(message);
-            } catch (NoSuchMethodError e) {
-                var chat = Minecraft.getInstance().gui.getChat();
+            } catch (Throwable t) {
                 try {
+                    var chat = Minecraft.getInstance().gui.getChat();
                     chat.getClass().getMethod("addClientSystemMessage", Component.class).invoke(chat, message);
-                } catch (Exception ex) {
-                    E4allClient.LOGGER.error("Failed to add message to client chat!");
+                } catch (Throwable ex) {
+                    E4allClient.LOGGER.error("Failed to add message to client chat!", ex);
                 }
             }
         });

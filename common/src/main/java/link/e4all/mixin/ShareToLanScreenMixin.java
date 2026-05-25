@@ -38,11 +38,6 @@ public abstract class ShareToLanScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"), require = 0)
     private void e4all$addOfflineModeButton(CallbackInfo ci) {
-        String className = this.getClass().getSimpleName();
-        if (!className.equals("ShareToLanScreen") && !className.equals("OpenToLanScreen") && !className.equals("class_436")) {
-            return;
-        }
-
         try {
             boolean currentValue = Config.INSTANCE.offlineMode.value();
             Component buttonText = e4all$getButtonText(currentValue);

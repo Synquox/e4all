@@ -33,17 +33,20 @@ public class DialtoneServerChannel extends AbstractServerChannel {
     protected void doBind(SocketAddress localAddress) throws Exception {
         this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
         this.dispatcher = new Thread(() -> {
-                while (true) {
-                    try {
-                        Runnable polled = endpoint.pollCallbackLoop();
-                        polled.run();
-                    } catch (NativeException e) {
-                        E4allClient.LOGGER.error("poll exc, stopping", e);
-                        throw e;
-                    } catch (Throwable e) {
-                        E4allClient.LOGGER.error("poll exc, continuing", e);
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Runnable polled = endpoint.pollCallbackLoop();
+                    polled.run();
+                } catch (NativeException e) {
+                    E4allClient.LOGGER.error("poll exc, stopping", e);
+                    break;
+                } catch (Throwable e) {
+                    if (e instanceof InterruptedException || Thread.currentThread().isInterrupted()) {
+                        break;
                     }
+                    E4allClient.LOGGER.error("poll exc, continuing", e);
                 }
+            }
         }, "Dialtone Server Dispatcher");
         this.dispatcher.setDaemon(true);
         this.dispatcher.start();
