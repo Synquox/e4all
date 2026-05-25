@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1
+
+- Fixed the "Online Mode" toggle button not appearing on the Open to LAN screen on Forge runtimes by making the screen mixin fully mapping-agnostic: the `init` injection now matches across Mojang/intermediary/SRG names, and the button construction (`Button.builder` / `bounds` / `build`), `Screen.addRenderableWidget`, `Button.setMessage`, and the `Button.OnPress` SAM dispatch are all resolved by signature via reflection instead of relying on compile-time references that bake in Mojang-only names.
+- Fixed the `DataFormatException: incorrect header check` crash that affected hosted worlds on Forge 1.20.1 with heavy modpacks: the compression-skip in `ConnectionMixin#killDoubleCompression` is now restricted to peer-to-peer Dialtone channels and no longer applies to relay-tunneled `QuicStreamChannel` connections, where the host was writing raw frames while the client kept zlib-decompressing them on the other side of the relay.
+- Fixed the "Encrypting..." infinite hang for clients joining offline-mode hosted worlds: the `ServerLoginPacketListenerImpl.handleKey` / `handleHello` redirects, the `ClientHandshakePacketListenerImpl.handleHello` redirects, and the `OfflineModeMixin` auth-skip now use cross-mapping method regexes so the offline-mode bypass actually applies on Forge runtimes whose intermediate names differ from Mojang.
+- Fixed silent mixin no-ops on Forge runtimes for `MinecraftServer.usesAuthentication`, `ServerConnectionListener.startTcpServerListener` / `stop`, and `ServerNameResolver.resolveAddress` by switching their `@Inject` / `@ModifyArg` / `@Redirect` method targets to the same cross-mapping regex pattern.
+- Forge: explicitly registered the `e4all.mixins.json` config in `mods.toml` as a belt-and-suspenders to the manifest entry so mixin loading does not depend on Forge's mixin service reading the JAR manifest.
+
 ## 1.4.0
 
 - Fixed memory and background thread leaks in Dialtone event loop dispatchers.

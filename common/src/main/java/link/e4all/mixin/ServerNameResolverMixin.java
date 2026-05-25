@@ -27,7 +27,7 @@ import java.util.Optional;
 public class ServerNameResolverMixin {
     @Unique
     private static final HttpClient E4ALL_HTTP_CLIENT = HttpClient.newHttpClient();
-    @ModifyArg(method = "<clinit>", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerNameResolver;<init>(Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;Lnet/minecraft/client/multiplayer/resolver/ServerRedirectHandler;Lnet/minecraft/client/multiplayer/resolver/AddressCheck;)V"), index = 1)
+    @ModifyArg(method = "<clinit>", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerNameResolver;<init>(Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;Lnet/minecraft/client/multiplayer/resolver/ServerRedirectHandler;Lnet/minecraft/client/multiplayer/resolver/AddressCheck;)V"), index = 1, require = 0)
     private static ServerRedirectHandler addDialtoneRedirectHandler(ServerRedirectHandler innerHandler) {
         DirContext dirContext;
         try {
@@ -83,7 +83,7 @@ public class ServerNameResolverMixin {
         return innerHandler;
     }
 
-    @Redirect(method = "resolveAddress", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"))
+    @Redirect(method = "/^(resolveAddress|method_2965|m_171848_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"), require = 0)
     private Optional<ResolvedServerAddress> resolveBogus(ServerAddressResolver instance, ServerAddress serverAddress) {
         var smuggledTicket = ((TicketSmuggler) (Object) serverAddress).e4mc$getSmuggledTicket();
         if (smuggledTicket != null) {

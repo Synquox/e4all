@@ -22,7 +22,7 @@ import java.security.PublicKey;
 public class ClientHandshakePacketListenerImplMixin {
     @Shadow @Final private Connection connection;
 
-    @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ClientboundHelloPacket;getPublicKey()Ljava/security/PublicKey;"))
+    @Redirect(method = "/^(handleHello|method_2912|m_141001_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ClientboundHelloPacket;getPublicKey()Ljava/security/PublicKey;"), require = 0)
     private PublicKey publicKey(ClientboundHelloPacket instance) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
@@ -30,7 +30,7 @@ public class ClientHandshakePacketListenerImplMixin {
         return instance.getPublicKey();
     }
 
-    @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;digestData(Ljava/lang/String;Ljava/security/PublicKey;Ljavax/crypto/SecretKey;)[B"))
+    @Redirect(method = "/^(handleHello|method_2912|m_141001_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;digestData(Ljava/lang/String;Ljava/security/PublicKey;Ljavax/crypto/SecretKey;)[B"), require = 0)
     private byte[] digestData(String string, PublicKey publicKey, SecretKey secretKey) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return ((DialtoneConnectionExtensions) connection).e4mc$exportKeyingMaterial("EXPERIMENTAL mojang authentication".getBytes(StandardCharsets.UTF_8), new byte[0], 20);
@@ -39,7 +39,7 @@ public class ClientHandshakePacketListenerImplMixin {
     }
 
     @Redirect(
-        method = "handleHello",
+        method = "/^(handleHello|method_2912|m_141001_)$/",
         at = @At(
             value = "INVOKE",
             target = "Lcom/mojang/authlib/minecraft/MinecraftSessionService;joinServer(Ljava/util/UUID;Ljava/lang/String;Ljava/lang/String;)V"

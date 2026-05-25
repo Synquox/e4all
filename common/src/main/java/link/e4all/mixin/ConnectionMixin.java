@@ -112,20 +112,28 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    // Skip compression for DialtoneChannel — the QUIC/iroh transport handles
-    // data efficiently already; applying Minecraft's zlib on top causes
-    // "incorrect header check" DecoderExceptions due to compression state
-    // mismatches during the async QUIC handshake.
+    // Skip Minecraft's zlib compression on DialtoneChannel (P2P iroh transport)
+    // because the iroh transport already handles data efficiently and applying
+    // Minecraft's zlib on top causes "incorrect header check" DecoderExceptions
+    // due to compression-state mismatches during the async QUIC handshake.
+    //
+    // IMPORTANT: We must NOT skip compression on QUIC relay-tunneled connections.
+    // The relay simply forwards encrypted, length-prefixed Minecraft frames
+    // between host and client — the actual Connection objects on each end still
+    // run on the normal local socket. If the host skipped compression but the
+    // client did not (or vice versa) you'd hit the exact "incorrect header
+    // check" symptom: one side writes raw frames while the other side tries to
+    // zlib-decompress them. Real e4mc never touched this path.
     @Inject(method = "/^(setupCompression|setCompressionThreshold|method_10760|m_129514_)$/", at = @At("HEAD"), cancellable = true, require = 0)
     private void killDoubleCompression(int threshold, boolean validate, CallbackInfo ci) {
-        if (channel instanceof DialtoneChannel || (channel != null && channel.getClass().getName().contains("QuicStreamChannel"))) {
+        if (channel instanceof DialtoneChannel) {
             ci.cancel();
         }
     }
 
     @Surrogate
     private void killDoubleCompression(int threshold, CallbackInfo ci) {
-        if (channel instanceof DialtoneChannel || (channel != null && channel.getClass().getName().contains("QuicStreamChannel"))) {
+        if (channel instanceof DialtoneChannel) {
             ci.cancel();
         }
     }

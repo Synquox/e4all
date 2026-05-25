@@ -13,16 +13,30 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
+
 /**
- * Mixin to inject an "Offline Mode" toggle button into the Share to LAN screen.
+ * Mixin that injects the "Online Mode" toggle button into the ShareToLanScreen.
  *
- * Uses direct method calls (Button.builder, addRenderableWidget) instead of
- * reflection so that Architectury Loom's transformer can properly remap them
- * to SRG names for Forge at build time. String-based reflection cannot be
- * remapped and silently fails on Forge's SRG runtime.
+ * Cross-version compatibility notes:
+ *   - The mod is compiled against MC 1.20.2 (Mojang names), but is loaded onto
+ *     Forge 1.20.1 (SRG runtime), Forge 1.20.2+ (Mojang runtime), Fabric
+ *     (intermediary runtime), NeoForge, etc.
+ *   - The @Inject `method` value uses a regex that matches every known runtime
+ *     name for Screen.init across mappings so the injection actually applies
+ *     on Forge 1.20.1's SRG runtime.
+ *   - All MC API calls inside the injected method (Button construction,
+ *     Screen.addRenderableWidget, Button.OnPress SAM dispatch) are performed
+ *     reflectively by signature so they resolve correctly regardless of
+ *     whether the runtime uses Mojang, SRG, or intermediary names.
  *
- * When offline mode is first enabled and the warning hasn't been shown yet,
- * a one-time warning message is displayed in chat when the LAN server opens.
+ * Without this, the injected lambda/method references baked in at compile
+ * time would reference Mojang-named methods that do not exist on Forge 1.20.1,
+ * causing silent NoSuchMethodErrors and a missing button.
  */
 @Mixin(ShareToLanScreen.class)
 public abstract class ShareToLanScreenMixin extends Screen {
@@ -31,35 +45,21 @@ public abstract class ShareToLanScreenMixin extends Screen {
         super(component);
     }
 
-    @Unique
-    private Button e4all$offlineModeButton;
-
-    @Inject(method = "init", at = @At("TAIL"))
+    @Inject(method = "/^(init|method_25426|m_7856_)$/", at = @At("TAIL"), require = 0)
     private void e4all$addOfflineModeButton(CallbackInfo ci) {
         try {
             boolean currentValue = Config.INSTANCE.offlineMode.value();
             Component buttonText = e4all$getButtonText(currentValue);
-
-            Button button;
-            try {
-                // MC 1.19.4+ — direct call so Architectury Transformer can remap for Forge
-                button = Button.builder(buttonText, this::e4all$onToggle)
-                    .bounds(this.width / 2 - 155, this.height - 56, 150, 20)
-                    .build();
-            } catch (NoSuchMethodError e) {
-                // MC 1.18–1.19.3 — Button.builder doesn't exist, use legacy constructor
-                button = e4all$createButtonLegacy(
-                    this.width / 2 - 155, this.height - 56, 150, 20,
-                    buttonText
-                );
+            Object button = e4all$createButton(this.width / 2 - 155, this.height - 56, 150, 20, buttonText);
+            if (button == null) {
+                E4allClient.LOGGER.warn("e4all: Could not construct Online Mode toggle button on this MC version");
+                return;
             }
-
-            this.e4all$offlineModeButton = button;
-
-            // Direct call — Architectury Transformer remaps this to the correct SRG name
-            this.addRenderableWidget(button);
+            if (!e4all$addWidgetReflectively(button)) {
+                E4allClient.LOGGER.warn("e4all: Could not add Online Mode toggle button to the LAN screen");
+            }
         } catch (Throwable e) {
-            E4allClient.LOGGER.warn("e4all: Failed to add offline mode button to LAN screen", e);
+            E4allClient.LOGGER.warn("e4all: Failed to add Online Mode toggle button to LAN screen", e);
         }
     }
 
@@ -74,26 +74,202 @@ public abstract class ShareToLanScreenMixin extends Screen {
     }
 
     @Unique
-    private void e4all$onToggle(Button button) {
+    private void e4all$onToggle(Object buttonObj) {
         boolean newValue = !Config.INSTANCE.offlineMode.value();
         Config.INSTANCE.offlineMode.setValue(newValue, true);
-        button.setMessage(e4all$getButtonText(newValue));
+        Component newText = e4all$getButtonText(newValue);
+        // Button.setMessage(Component) — also SRG-remapped, so call reflectively
+        try {
+            for (Method m : buttonObj.getClass().getMethods()) {
+                if (m.getParameterCount() != 1) continue;
+                if (!Component.class.isAssignableFrom(m.getParameterTypes()[0])) continue;
+                if (m.getReturnType() != void.class) continue;
+                String n = m.getName();
+                if (n.equals("setMessage") || n.equals("method_25355") || n.equals("m_93666_")) {
+                    m.invoke(buttonObj, newText);
+                    return;
+                }
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: Could not update button label after toggle", t);
+        }
     }
 
     /**
-     * Legacy button constructor for MC 1.18–1.19.3 where Button.builder() doesn't exist.
-     * Uses reflection since the constructor was removed in newer versions and can't be
-     * referenced directly when compiling against 1.20.2.
+     * Build a Button across MC versions. In 1.19.4+ this is Button.builder(...).
+     * In 1.18 - 1.19.3 it was a public constructor. We look both up reflectively
+     * so we don't bake in Mojang-named method references that break on SRG runtimes.
      */
     @Unique
-    private Button e4all$createButtonLegacy(int x, int y, int width, int height, Component text) {
+    private Object e4all$createButton(int x, int y, int w, int h, Component text) {
+        // Build a Button.OnPress impl via Proxy — InvocationHandler is name-agnostic
+        // so it works whether the SAM is `onPress`, `method_25306`, or `m_93750_`.
+        InvocationHandler handler = (proxy, method, args) -> {
+            if (args != null && args.length == 1) {
+                e4all$onToggle(args[0]);
+            }
+            return null;
+        };
+        Object onPress = Proxy.newProxyInstance(
+            Button.OnPress.class.getClassLoader(),
+            new Class<?>[]{Button.OnPress.class},
+            handler
+        );
+
+        // First try: 1.19.4+ Button.builder(Component, OnPress).bounds(x,y,w,h).build()
         try {
-            var constructor = Button.class.getConstructor(
+            Method builderMethod = e4all$findStaticBuilder();
+            if (builderMethod != null) {
+                builderMethod.setAccessible(true);
+                Object builder = builderMethod.invoke(null, text, onPress);
+                Method boundsMethod = e4all$findBoundsMethod(builder.getClass());
+                if (boundsMethod != null) {
+                    boundsMethod.setAccessible(true);
+                    Object next = boundsMethod.invoke(builder, x, y, w, h);
+                    if (next != null) {
+                        builder = next;
+                    }
+                }
+                Method buildMethod = e4all$findBuildMethod(builder.getClass());
+                if (buildMethod != null) {
+                    buildMethod.setAccessible(true);
+                    Object built = buildMethod.invoke(builder);
+                    if (built != null) {
+                        return built;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: Button.builder() path failed, trying legacy constructor", t);
+        }
+
+        // Fallback: 1.18 - 1.19.3 legacy public constructor
+        try {
+            Constructor<?> ctor = Button.class.getConstructor(
                 int.class, int.class, int.class, int.class, Component.class, Button.OnPress.class
             );
-            return constructor.newInstance(x, y, width, height, text, (Button.OnPress) this::e4all$onToggle);
-        } catch (Exception e) {
-            throw new RuntimeException("e4all: Could not create button for any known MC version", e);
+            return ctor.newInstance(x, y, w, h, text, onPress);
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: Legacy Button constructor not available", t);
         }
+        return null;
+    }
+
+    @Unique
+    private static Method e4all$findStaticBuilder() {
+        // A static method on Button returning a Button.Builder-like type with
+        // (Component, Button.OnPress) signature. Match by signature, not name.
+        for (Method m : Button.class.getMethods()) {
+            if (!Modifier.isStatic(m.getModifiers())) continue;
+            Class<?>[] params = m.getParameterTypes();
+            if (params.length != 2) continue;
+            if (!params[0].equals(Component.class)) continue;
+            if (!params[1].equals(Button.OnPress.class)) continue;
+            return m;
+        }
+        return null;
+    }
+
+    @Unique
+    private static Method e4all$findBoundsMethod(Class<?> builderClass) {
+        // Builder.bounds(int, int, int, int) returning the same Builder type.
+        for (Method m : builderClass.getMethods()) {
+            if (Modifier.isStatic(m.getModifiers())) continue;
+            Class<?>[] params = m.getParameterTypes();
+            if (params.length != 4) continue;
+            if (!params[0].equals(int.class)) continue;
+            if (!params[1].equals(int.class)) continue;
+            if (!params[2].equals(int.class)) continue;
+            if (!params[3].equals(int.class)) continue;
+            if (!m.getReturnType().equals(builderClass)) continue;
+            return m;
+        }
+        return null;
+    }
+
+    @Unique
+    private static Method e4all$findBuildMethod(Class<?> builderClass) {
+        // Builder.build() returning a Button.
+        for (Method m : builderClass.getMethods()) {
+            if (Modifier.isStatic(m.getModifiers())) continue;
+            if (m.getParameterCount() != 0) continue;
+            if (!Button.class.isAssignableFrom(m.getReturnType())) continue;
+            return m;
+        }
+        return null;
+    }
+
+    /**
+     * Add a widget to this Screen via reflection so we work whether the
+     * runtime mapping is `addRenderableWidget` (Mojang), `method_37063`
+     * (intermediary), or `m_142416_` (SRG 1.20.1).
+     */
+    @Unique
+    private boolean e4all$addWidgetReflectively(Object widget) {
+        Class<?> widgetClass = widget.getClass();
+
+        // First pass: known names
+        String[] candidates = {
+            "addRenderableWidget", // Mojang / yarn 1.17+
+            "method_37063",        // intermediary
+            "m_142416_",           // SRG 1.20.1
+            "addDrawableChild"     // older yarn
+        };
+        Method best = e4all$findScreenSingleArgMethod(widgetClass, candidates);
+
+        // Second pass: signature-based, in case mappings rename the method
+        if (best == null) {
+            best = e4all$findScreenSingleArgMethod(widgetClass, null);
+        }
+
+        if (best == null) {
+            return false;
+        }
+        try {
+            best.setAccessible(true);
+            best.invoke(this, widget);
+            return true;
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: Failed to invoke {} reflectively", best.getName(), t);
+            return false;
+        }
+    }
+
+    @Unique
+    private static Method e4all$findScreenSingleArgMethod(Class<?> widgetClass, String[] nameFilter) {
+        Class<?> c = Screen.class;
+        while (c != null && c != Object.class) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (Modifier.isStatic(m.getModifiers())) continue;
+                if (m.getParameterCount() != 1) continue;
+                Class<?> p = m.getParameterTypes()[0];
+                if (!p.isAssignableFrom(widgetClass)) continue;
+                if (nameFilter != null) {
+                    boolean match = false;
+                    for (String n : nameFilter) {
+                        if (m.getName().equals(n)) {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if (!match) continue;
+                }
+                // Filter out unrelated methods (e.g. removeWidget, isWidgetActive, …).
+                // The MC widget-add methods all accept a subtype of GuiEventListener
+                // (or AbstractWidget). We accept any single-arg method that takes a
+                // type our widget is assignable to AND whose name is on the known
+                // list, OR whose param type's simple name contains "Widget" /
+                // "GuiEventListener" when name filter is null.
+                if (nameFilter == null) {
+                    String pn = p.getSimpleName();
+                    if (!pn.contains("Widget") && !pn.contains("GuiEventListener") && !pn.contains("Renderable")) {
+                        continue;
+                    }
+                }
+                return m;
+            }
+            c = c.getSuperclass();
+        }
+        return null;
     }
 }
