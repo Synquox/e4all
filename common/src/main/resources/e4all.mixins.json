@@ -21,6 +21,7 @@
   },
   "client": [
     "ClientHandshakePacketListenerImplMixin",
+    "IntegratedServerMixin",
     "PlayerListMixin",
     "ServerAddressMixin",
     "ServerNameResolverMixin",

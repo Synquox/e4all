@@ -47,7 +47,11 @@ public class QuiclimeSession {
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private static final int RECONNECT_BASE_DELAY_SECONDS = 2;
     private static final int KEEPALIVE_INTERVAL_SECONDS = 5;
-    private static final int MAX_IDLE_TIMEOUT_SECONDS = 30;
+    // QUIC idle timeout. A 30s window is tight on flaky networks where a 5–10s
+    // hiccup can trigger a full tunnel renegotiation (which assigns a new
+    // domain). 60s is still well below typical NAT mapping lifetimes and gives
+    // keepalives a wider margin to recover before the relay drops the session.
+    private static final int MAX_IDLE_TIMEOUT_SECONDS = 60;
 
     final ChannelHandler handler;
 

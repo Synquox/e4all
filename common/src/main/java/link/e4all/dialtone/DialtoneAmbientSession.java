@@ -13,13 +13,17 @@ public class DialtoneAmbientSession {
     public static final DialtoneAmbientSession INSTANCE = new DialtoneAmbientSession();
 
     public EventLoopGroup group = new DefaultEventLoopGroup();
-    Endpoint endpoint;
-    Thread dispatcher;
+    volatile Endpoint endpoint;
+    volatile Thread dispatcher;
 
     private DialtoneAmbientSession() {}
 
-    public void start() throws Exception {
-        if (endpoint != null || dispatcher != null) {
+    public synchronized void start() throws Exception {
+        if (endpoint != null) {
+            // Already started by another thread while we were racing for this lock.
+            return;
+        }
+        if (dispatcher != null) {
             E4allClient.LOGGER.info("Cleaning up stale DialtoneAmbientSession before restart");
             stop();
         }
@@ -45,7 +49,7 @@ public class DialtoneAmbientSession {
         this.dispatcher.start();
     }
 
-    public void stop() {
+    public synchronized void stop() {
         final Endpoint endpointRef = endpoint;
         final Thread dispatcherRef = dispatcher;
         endpoint = null;

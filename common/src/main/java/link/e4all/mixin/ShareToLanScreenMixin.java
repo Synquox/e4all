@@ -47,17 +47,28 @@ public abstract class ShareToLanScreenMixin extends Screen {
 
     @Inject(method = "/^(init|method_25426|m_7856_)$/", at = @At("TAIL"), require = 0)
     private void e4all$addOfflineModeButton(CallbackInfo ci) {
+        E4allClient.LOGGER.info("e4all: ShareToLanScreen.init() reached, adding Online Mode toggle button");
         try {
             boolean currentValue = Config.INSTANCE.offlineMode.value();
             Component buttonText = e4all$getButtonText(currentValue);
-            Object button = e4all$createButton(this.width / 2 - 155, this.height - 56, 150, 20, buttonText);
+            // Place above the bottom row (where ShareToLanScreen puts its Start/Cancel
+            // buttons). y = height - 56 collides with the existing "Allow Cheats" /
+            // gamemode row on some 1.20.x versions, hiding our button behind them.
+            // Shifting up to y = height - 80 puts us in a less-contested spot.
+            int x = this.width / 2 - 155;
+            int y = this.height - 80;
+            int w = 150;
+            int h = 20;
+            Object button = e4all$createButton(x, y, w, h, buttonText);
             if (button == null) {
                 E4allClient.LOGGER.warn("e4all: Could not construct Online Mode toggle button on this MC version");
                 return;
             }
             if (!e4all$addWidgetReflectively(button)) {
                 E4allClient.LOGGER.warn("e4all: Could not add Online Mode toggle button to the LAN screen");
+                return;
             }
+            E4allClient.LOGGER.info("e4all: Online Mode toggle button added at ({}, {})", x, y);
         } catch (Throwable e) {
             E4allClient.LOGGER.warn("e4all: Failed to add Online Mode toggle button to LAN screen", e);
         }

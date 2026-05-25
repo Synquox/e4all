@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.2
+
+- Added `IntegratedServerMixin` (client-side) so the `Online Mode` toggle actually disables encryption for LAN integrated servers. The previous `MinecraftServerMixin` injection only affected the base class; on MC versions where `IntegratedServer.usesAuthentication()` overrides the parent without calling `super`, cracked clients still hit the encryption flow and hung indefinitely on `Encrypting…`.
+- Fixed `ConnectionMixin#killDoubleEncryption` silently no-opping on Forge SRG runtimes by switching its `setEncryptionKey` target to a cross-mapping regex (`setEncryptionKey | method_10772 | m_129506_`) with `require = 0`, matching the rest of the mixin's targets.
+- Hardened the `Online Mode` toggle button against silent failures: the LAN screen mixin now logs at `INFO` when the injection runs (so it is visible in the regular client log on Forge / Fabric) and shifts the button up to `y = height - 80` so it does not visually collide with the existing Cancel button row on 1.20.x.
+- Bumped the QUIC `MAX_IDLE_TIMEOUT_SECONDS` from 30 s to 60 s so brief network blips do not tear down the relay tunnel and force a new domain assignment. Keepalives remain at 5 s; the relay still drops the session at 60 s of silence.
+- Fixed a `DialtoneAmbientSession` race where two concurrent peer connects could both observe `endpoint == null` and double-start the iroh endpoint + dispatcher thread. `start()` / `stop()` are now `synchronized` and the `endpoint` / `dispatcher` fields are `volatile` so reads from outside the lock see the latest state.
+- Added `require = 0` to the `PlayerListMixin` constructor and `canPlayerLogin` injectors and the `ServerboundKeyPacketMixin` `<init>` redirect so older MC versions where the bytecode targets differ no longer hard-crash mod loading. They now fail open instead of taking the whole mod down.
+- Fixed `fabric/build.gradle` referencing `link.e4mc:iroh-java` while the other platform builds use `link.e4all:iroh-java`. With flat-dir resolution this was tolerated, but the inconsistency would break a future migration to a real Maven coordinate.
+
 ## 1.4.1
 
 - Fixed the "Online Mode" toggle button not appearing on the Open to LAN screen on Forge runtimes by making the screen mixin fully mapping-agnostic: the `init` injection now matches across Mojang/intermediary/SRG names, and the button construction (`Button.builder` / `bounds` / `build`), `Screen.addRenderableWidget`, `Button.setMessage`, and the `Button.OnPress` SAM dispatch are all resolved by signature via reflection instead of relying on compile-time references that bake in Mojang-only names.

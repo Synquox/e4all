@@ -91,7 +91,11 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    @Inject(method = "setEncryptionKey", at = @At("HEAD"), cancellable = true)
+    // Cross-mapping regex: Mojang `setEncryptionKey`, intermediary
+    // `method_10772`, SRG `m_129506_`. Without these alternates the plain
+    // Mojang name silently no-ops on Forge SRG runtimes, leaving the
+    // double-encryption guard inactive on tunneled connections.
+    @Inject(method = "/^(setEncryptionKey|method_10772|m_129506_)$/", at = @At("HEAD"), cancellable = true, require = 0)
     private void killDoubleEncryption(Cipher cipher, Cipher cipher2, CallbackInfo ci) {
         if (channel instanceof DialtoneChannel) {
             encrypted = true;
