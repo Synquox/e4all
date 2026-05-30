@@ -16,4 +16,9 @@ public class MinecraftServerMixin {
             cir.setReturnValue(false);
         }
     }
+
+    @Inject(method = "enforceSecureProfile", at = @At("HEAD"), cancellable = true, require = 0)
+    private void e4all$enforceSecureProfile(CallbackInfoReturnable<Boolean> cir) {
+        cir.setReturnValue(false);
+    }
 }

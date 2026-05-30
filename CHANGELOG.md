@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0
+
+- Integrated a robust server-side "No-Chat-Reports" mechanism to automatically strip signatures from player chat messages and commands when "Offline Mode" is active, ensuring offline/unauthenticated players can chat without client signature verification warnings.
+- Automatically disables secure profile enforcement when starting a LAN server in offline mode.
+- Optimized and simplified packet manipulation logic across all supported platforms and Minecraft versions (1.18.x to 1.20.x).
+
 ## 1.4.0
 
 - Added a robust "Online Mode" toggle button to the "Open to LAN" screen for Forge, Fabric, and NeoForge (Minecraft 1.20.1/1.20.2+).

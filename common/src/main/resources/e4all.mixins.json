@@ -3,6 +3,7 @@
   "package": "link.e4all.mixin",
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
+  "plugin": "link.e4all.mixin.E4allMixinPlugin",
   "mixins": [
     "BanListCommandsMixin",
     "BanPlayerCommandsMixin",
@@ -13,7 +14,12 @@
     "ServerboundKeyPacketMixin",
     "ServerConnectionListenerMixin",
     "ServerLoginPacketListenerImplMixin",
-    "WhitelistCommandMixin"
+    "WhitelistCommandMixin",
+    "ncr.MixinConnection",
+    "ncr.MixinPlayerList",
+    "ncr.MixinServerboundChatCommandPacket",
+    "ncr.MixinServerboundChatPacket",
+    "ncr.MixinServerboundChatSessionUpdatePacket"
   ],
   "injectors": {
     "defaultRequire": 1
@@ -24,5 +30,8 @@
     "ServerAddressMixin",
     "ServerNameResolverMixin",
     "ShareToLanScreenMixin"
+  ],
+  "server": [
+    "ncr.MixinDedicatedServer"
   ]
 }
