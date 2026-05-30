@@ -167,8 +167,9 @@ public class DialtoneChannel extends AbstractChannel {
             }
             try {
                 if (byteBuffer == null) {
-                    byte[] arr = new byte[buf.readableBytes()];
-                    buf.readBytes(arr, 0, buf.readableBytes());
+                    int len = buf.readableBytes();
+                    byte[] arr = new byte[len];
+                    buf.readBytes(arr, 0, len);
                     stream.writeIrohStreamByteArray(arr, 0, arr.length).thenAccept(nothing -> {
                         // Dispatch back to event loop — ChannelOutboundBuffer is not thread-safe
                         eventLoop().execute(() -> {

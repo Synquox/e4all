@@ -91,7 +91,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    @Inject(method = "setEncryptionKey", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "/^(setEncryptionKey|method_10746|m_129506_)$/", at = @At("HEAD"), cancellable = true, require = 0)
     private void killDoubleEncryption(Cipher cipher, Cipher cipher2, CallbackInfo ci) {
         if (channel instanceof DialtoneChannel) {
             encrypted = true;
@@ -100,7 +100,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     }
 
     // Add client-side voice chat bridge handler to DialtoneChannel connections
-    @Inject(method = "/^(channelActive|method_10757|m_129508_)$/", at = @At("TAIL"), require = 0)
+    @Inject(method = "channelActive", at = @At("TAIL"), require = 0)
     private void e4all$addVoiceBridgeOnActive(ChannelHandlerContext ctx, CallbackInfo ci) {
         if (channel instanceof DialtoneChannel && Config.INSTANCE.voiceChatBridgeEnabled.value()) {
             try {
@@ -116,7 +116,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     // data efficiently already; applying Minecraft's zlib on top causes
     // "incorrect header check" DecoderExceptions due to compression state
     // mismatches during the async QUIC handshake.
-    @Inject(method = "/^(setupCompression|setCompressionThreshold|method_10760|m_129514_)$/", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "setupCompression", at = @At("HEAD"), cancellable = true, require = 0)
     private void killDoubleCompression(int threshold, boolean validate, CallbackInfo ci) {
         if (channel instanceof DialtoneChannel) {
             ci.cancel();

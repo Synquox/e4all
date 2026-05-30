@@ -47,7 +47,7 @@ public class QuiclimeSession {
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private static final int RECONNECT_BASE_DELAY_SECONDS = 2;
     private static final int KEEPALIVE_INTERVAL_SECONDS = 5;
-    private static final int MAX_IDLE_TIMEOUT_SECONDS = 30;
+    private static final int MAX_IDLE_TIMEOUT_SECONDS = 60;
 
     final ChannelHandler handler;
 
@@ -200,7 +200,7 @@ public class QuiclimeSession {
     private DatagramChannel datagramChannel;
     private QuicChannel quicChannel;
     private DialtoneServerChannel dialtoneChannel;
-    private ScheduledFuture<?> keepaliveFuture;
+    private volatile ScheduledFuture<?> keepaliveFuture;
 
     public QuiclimeSession(ChannelHandler handler, EventLoopGroup group) {
         this.handler = handler;
@@ -405,10 +405,10 @@ public class QuiclimeSession {
                                             if (E4allClient.badurl) {
                                                 Mirror.addMessage(Mirror.translatable("text.e4mc_minecraft.poisonpill.badurl"));
                                             }
-                                            // Show one-time offline mode warning when LAN actually opens
-                                            if (Config.INSTANCE.offlineMode.value() && !Config.INSTANCE.offlineWarningShown.value()) {
+                                            // Show offline mode warning when LAN actually opens
+                                            if (Config.INSTANCE.offlineMode.value()) {
                                                 Config.INSTANCE.offlineWarningShown.setValue(true, true);
-                                                LOGGER.warn("e4all: Offline mode enabled — Microsoft authentication will be disabled for LAN connections");
+                                                LOGGER.warn("e4all: Offline mode enabled — Microsoft authentication is disabled for this session.");
                                                 Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4mc_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
                                             }
                                         }
@@ -487,15 +487,20 @@ public class QuiclimeSession {
     private void startKeepalive(QuicChannel channel) {
         cancelKeepalive();
         keepaliveFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
+                if (!channel.isActive()) {
+                    cancelKeepalive();
+                    return;
+                }
                 channel.flush();
         }, KEEPALIVE_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     private void cancelKeepalive() {
-        if (keepaliveFuture != null && !keepaliveFuture.isCancelled()) {
-            keepaliveFuture.cancel(false);
-            keepaliveFuture = null;
+        ScheduledFuture<?> future = keepaliveFuture;
+        if (future != null && !future.isCancelled()) {
+            future.cancel(false);
         }
+        keepaliveFuture = null;
     }
 
     private void fail(Throwable e) {

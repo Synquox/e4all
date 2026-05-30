@@ -27,7 +27,7 @@ public class ServerLoginPacketListenerImplMixin {
     @Shadow @Final
     Connection connection;
 
-    @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Ljava/security/PublicKey;getEncoded()[B"))
+    @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Ljava/security/PublicKey;getEncoded()[B"), require = 0)
     private byte[] killDoubleEncryption(PublicKey instance) {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return new byte[0];
@@ -59,7 +59,7 @@ public class ServerLoginPacketListenerImplMixin {
         return privateKey;
     }
 
-    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ServerboundKeyPacket;getSecretKey(Ljava/security/PrivateKey;)Ljavax/crypto/SecretKey;"))
+    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ServerboundKeyPacket;getSecretKey(Ljava/security/PrivateKey;)Ljavax/crypto/SecretKey;"), require = 0)
     private SecretKey getSecretKey(ServerboundKeyPacket instance, PrivateKey privateKey) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
@@ -67,7 +67,7 @@ public class ServerLoginPacketListenerImplMixin {
         return instance.getSecretKey(privateKey);
     }
 
-    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"))
+    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"), require = 0)
     private Cipher getCipher(int i, Key key) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
@@ -75,7 +75,7 @@ public class ServerLoginPacketListenerImplMixin {
         return Crypt.getCipher(i, key);
     }
 
-    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;digestData(Ljava/lang/String;Ljava/security/PublicKey;Ljavax/crypto/SecretKey;)[B"))
+    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;digestData(Ljava/lang/String;Ljava/security/PublicKey;Ljavax/crypto/SecretKey;)[B"), require = 0)
     private byte[] digestData(String string, PublicKey publicKey, SecretKey secretKey) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return ((DialtoneConnectionExtensions) connection).e4mc$exportKeyingMaterial("EXPERIMENTAL mojang authentication".getBytes(StandardCharsets.UTF_8), new byte[0], 20);

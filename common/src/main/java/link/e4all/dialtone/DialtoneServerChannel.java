@@ -34,8 +34,10 @@ public class DialtoneServerChannel extends AbstractServerChannel {
         this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
         this.dispatcher = new Thread(() -> {
                 while (true) {
+                    Endpoint ep = endpoint;
+                    if (ep == null) break;
                     try {
-                        Runnable polled = endpoint.pollCallbackLoop();
+                        Runnable polled = ep.pollCallbackLoop();
                         polled.run();
                     } catch (NativeException e) {
                         E4allClient.LOGGER.error("poll exc, stopping", e);

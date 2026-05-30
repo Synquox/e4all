@@ -13,12 +13,12 @@ public class DialtoneAmbientSession {
     public static final DialtoneAmbientSession INSTANCE = new DialtoneAmbientSession();
 
     public EventLoopGroup group = new DefaultEventLoopGroup();
-    Endpoint endpoint;
-    Thread dispatcher;
+    volatile Endpoint endpoint;
+    volatile Thread dispatcher;
 
     private DialtoneAmbientSession() {}
 
-    public void start() throws Exception {
+    public synchronized void start() throws Exception {
         if (endpoint != null || dispatcher != null) {
             E4allClient.LOGGER.info("Cleaning up stale DialtoneAmbientSession before restart");
             stop();
@@ -27,8 +27,10 @@ public class DialtoneAmbientSession {
         this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
         this.dispatcher = new Thread(() -> {
             while (true) {
+                Endpoint ep = endpoint;
+                if (ep == null) break;
                 try {
-                    Runnable polled = endpoint.pollCallbackLoop();
+                    Runnable polled = ep.pollCallbackLoop();
                     polled.run();
                 } catch (NativeException e) {
                     E4allClient.LOGGER.error("poll exc, stopping", e);
@@ -42,7 +44,7 @@ public class DialtoneAmbientSession {
         this.dispatcher.start();
     }
 
-    public void stop() {
+    public synchronized void stop() {
         final Endpoint endpointRef = endpoint;
         final Thread dispatcherRef = dispatcher;
         endpoint = null;

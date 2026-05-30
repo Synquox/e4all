@@ -212,10 +212,22 @@ public class VoiceChatPacketHelper {
 
     private static void sendVoiceDataWithConstructor(Channel channel, byte[] data, Constructor<?> ctor) throws Exception {
         Object rl = makeResourceLocation("e4all", "vc");
-        ByteBuf rawBuf = Unpooled.wrappedBuffer(data);
-        Object friendlyBuf = friendlyByteBufConstructor.newInstance(rawBuf);
-        Object packet = ctor.newInstance(rl, friendlyBuf);
-        channel.writeAndFlush(packet);
+        ByteBuf rawBuf = null;
+        Object friendlyBuf = null;
+        try {
+            rawBuf = Unpooled.wrappedBuffer(data);
+            friendlyBuf = friendlyByteBufConstructor.newInstance(rawBuf);
+            Object packet = ctor.newInstance(rl, friendlyBuf);
+            rawBuf = null;
+            friendlyBuf = null;
+            channel.writeAndFlush(packet);
+        } finally {
+            if (friendlyBuf instanceof ByteBuf buf) {
+                buf.release();
+            } else if (rawBuf != null) {
+                rawBuf.release();
+            }
+        }
     }
 
     /**

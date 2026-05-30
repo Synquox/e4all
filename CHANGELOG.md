@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+- Added a robust "Online Mode" toggle button to the "Open to LAN" screen for Forge, Fabric, and NeoForge (Minecraft 1.20.1/1.20.2+).
+- Added persistent red warning messages in chat when starting a LAN server with Offline Mode active.
+- Fixed a Mixin target descriptor crash on Fabric at startup.
+- Fixed a silent injection failure on Forge where the Online Mode button failed to render.
+- Resolved and cleaned up unused/redundant mixins causing compiler and remapper warnings.
+- Cleaned up Netty NPE race conditions in `DialtoneServerChannel` and double-read buffer anomalies in `DialtoneChannel`.
+
 ## 1.3.0
 
 - Added Simple Voice Chat bridge: voice chat now works over e4all tunneled connections.

@@ -56,7 +56,7 @@ public abstract class OfflineModeMixin {
 
     // Target for MC 1.18.x - 1.20.1 (takes String, String, InetAddress)
     @Redirect(
-        method = "handleKey",
+        method = "/^(handleKey|method_14384|m_10054_)$/",
         at = @At(
             value = "INVOKE",
             target = "Lcom/mojang/authlib/minecraft/MinecraftSessionService;hasJoinedServer(Ljava/lang/String;Ljava/lang/String;Ljava/net/InetAddress;)Lcom/mojang/authlib/GameProfile;"
@@ -79,7 +79,7 @@ public abstract class OfflineModeMixin {
 
     // Target for MC 1.20.2+ (method descriptor may differ with newer authlib)
     @Redirect(
-        method = "handleKey",
+        method = "/^(handleKey|method_14384|m_10054_)$/",
         at = @At(
             value = "INVOKE",
             target = "Lcom/mojang/authlib/minecraft/MinecraftSessionService;hasJoinedServer(Lcom/mojang/authlib/GameProfile;Ljava/lang/String;Ljava/net/InetAddress;)Lcom/mojang/authlib/GameProfile;"

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(MinecraftServer.class)
 public class MinecraftServerMixin {
 
-    @Inject(method = "usesAuthentication", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "usesAuthentication", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$forceOfflineMode(CallbackInfoReturnable<Boolean> cir) {
         if (Config.INSTANCE.offlineMode.value()) {
             cir.setReturnValue(false);
