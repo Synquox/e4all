@@ -1,34 +1,30 @@
 # Changelog
 
-## 1.5.0
+### 1.5.0
+* Added a built-in No-Chat-Reports feature so player signatures are stripped automatically when Offline Mode is active. No more annoying warnings.
+* Automatically turns off secure profiles when opening a LAN server in offline mode.
+* Cleaned up and simplified packet code across all supported versions from 1.18 to 1.20.
 
-- Integrated a robust server-side "No-Chat-Reports" mechanism to automatically strip signatures from player chat messages and commands when "Offline Mode" is active, ensuring offline/unauthenticated players can chat without client signature verification warnings.
-- Automatically disables secure profile enforcement when starting a LAN server in offline mode.
-- Optimized and simplified packet manipulation logic across all supported platforms and Minecraft versions (1.18.x to 1.20.x).
+### 1.4.0
+* Added an "Online Mode" toggle button to the "Open to LAN" screen for Forge, Fabric, and NeoForge (Minecraft 1.20.1/1.20.2+).
+* Added red warning messages in chat if you start a LAN server with Offline Mode turned on.
+* Fixed a Fabric crash at startup caused by a Mixin target issue.
+* Fixed a bug on Forge where the Online Mode button silently failed to show up.
+* Cleaned up unused and redundant mixins that were causing compiler and remapper warnings.
+* Fixed some annoying Netty network errors (NPEs and double-read buffer issues) in Dialtone code.
 
-## 1.4.0
+### 1.3.0
+* Added Simple Voice Chat support! Voice chat now works fine over e4all tunneled connections.
+* Fixed memory leaks related to voice chat packet handling.
+* Fixed accidental disconnections when a Dialtone connection failed.
+* Fixed wrong icon paths in Forge and NeoForge mod files.
+* Updated the repository links in the Fabric mod files.
 
-- Added a robust "Online Mode" toggle button to the "Open to LAN" screen for Forge, Fabric, and NeoForge (Minecraft 1.20.1/1.20.2+).
-- Added persistent red warning messages in chat when starting a LAN server with Offline Mode active.
-- Fixed a Mixin target descriptor crash on Fabric at startup.
-- Fixed a silent injection failure on Forge where the Online Mode button failed to render.
-- Resolved and cleaned up unused/redundant mixins causing compiler and remapper warnings.
-- Cleaned up Netty NPE race conditions in `DialtoneServerChannel` and double-read buffer anomalies in `DialtoneChannel`.
-
-## 1.3.0
-
-- Added Simple Voice Chat bridge: voice chat now works over e4all tunneled connections.
-- Fixed memory leaks in voice chat packet handling.
-- Fixed spurious disconnection events on failed Dialtone connections.
-- Fixed incorrect icon references in Forge and NeoForge mod descriptors.
-- Updated repository URLs in Fabric mod descriptors.
-
-## 1.2.0
-
-- Fixed a `DecoderException` ("incorrect header check") occurring on Dialtone connections by bypassing redundant Minecraft packet compression.
-- Improved cross-version UI compatibility using robust reflection for "Open to LAN" screen modifications.
-- Reinforced resource cleanup for networking tunnels.
-- Prepared for wider distribution under the `e4all` brand.
+### 1.2.0
+* Fixed a DecoderException ("incorrect header check") on Dialtone connections by skipping unnecessary Minecraft packet compression.
+* Better UI compatibility across versions by using reflection for the "Open to LAN" screen changes.
+* Made sure networking tunnels clean up their resources properly.
+* Prepped everything for wider release under the new e4all brand.
 
 ## 6.1.0
 
