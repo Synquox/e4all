@@ -1,16 +1,13 @@
 # Changelog
 
 ### 1.5.1
-* Fixed connection issues on modern Minecraft versions (1.20.5+) by supporting the new Netty connection signatures.
-* Fixed compatibility with Simple Voice Chat by making `DialtoneAddress` extend `InetSocketAddress`.
-* Fixed a `ThreadLocal` leak in the connection hijacker that could corrupt subsequent connections.
-* Fixed a potential infinite recursion (StackOverflowError) in the No Chat Reports integration.
-* Fixed the LAN tunnel failing to start on Forge/NeoForge (SRG mappings method target mismatch).
-* Fixed the DNS suffix validation check to block/ignore unauthorized resolvers rather than just warning.
-* Optimized connection speed by skipping DNS TXT queries on raw IP addresses.
-* Improved performance by caching local and remote socket addresses in `DialtoneChannel`.
-* Added proper feedback when executing `/e4all restart` without an active session.
-* Fixed a minor typo in `HoverEvent` construction error messages.
+* Fixed connection issues on Minecraft 1.20.5+ by supporting the new Netty connection format.
+* Fixed compatibility with Simple Voice Chat (no longer shows disconnected icon).
+* Fixed game crashes/freezes on certain MC versions (improved mixin compatibility).
+* Fixed a memory/connection leak that could corrupt subsequent connections.
+* Fixed a potential infinite recursion/crash with No-Chat-Reports.
+* Fixed a DNS suffix security check bypass.
+* Performance and minor improvements (cached addresses, optimized DNS queries, and error formatting fixes).
 
 ### 1.5.0
 * Added a built-in No-Chat-Reports feature so player signatures are stripped automatically when Offline Mode is active. No more annoying warnings.
