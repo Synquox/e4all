@@ -13,7 +13,7 @@
   "contact": {
     "sources": "https://github.com/Synquox/e4all"
   },
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "icon": "e4all_icon.png",
   "environment": "*",
   "entrypoints": {

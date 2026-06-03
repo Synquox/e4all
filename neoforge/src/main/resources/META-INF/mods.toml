@@ -1,6 +1,6 @@
 modLoader = "javafml"
 loaderVersion = "*"
-license = "GPL-3.0-only"
+license = "MIT"
 
 [[mods]]
 modId = "e4all"
