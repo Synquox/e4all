@@ -1,12 +1,13 @@
 package link.e4all.dialtone;
 
-import java.net.SocketAddress;
-import java.util.Objects;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 
-public class DialtoneAddress extends SocketAddress {
+public class DialtoneAddress extends InetSocketAddress {
     public final String actualAddress;
 
     public DialtoneAddress(String ticket) {
+        super(InetAddress.getLoopbackAddress(), 0);
         actualAddress = ticket;
     }
 
@@ -14,17 +15,4 @@ public class DialtoneAddress extends SocketAddress {
     public String toString() {
         return actualAddress;
     }
-
-    @Override
-    public boolean equals(Object object) {
-        if (object == null || getClass() != object.getClass()) return false;
-        DialtoneAddress that = (DialtoneAddress) object;
-        return Objects.equals(actualAddress, that.actualAddress);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(actualAddress);
-    }
 }
-

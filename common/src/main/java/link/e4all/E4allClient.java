@@ -90,6 +90,8 @@ public class E4allClient {
                                         new VoiceChatBridgeInitializer(rawHandler, true), group);
                                     E4allClient.session.startAsync();
                                     Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal("e4all: Restarting relay connection..."));
+                                } else {
+                                    Mirror.sendFailureToSource(ctx.getSource(), Mirror.literal("e4all: No active session to restart."));
                                 }
                             }
                             return 1;

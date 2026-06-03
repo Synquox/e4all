@@ -23,21 +23,34 @@ public abstract class MixinConnection {
     @Shadow
     private PacketListener packetListener;
 
+    // Re-entry guard to prevent infinite recursion when we call send() with the converted packet
+    private static final ThreadLocal<Boolean> e4all$converting = ThreadLocal.withInitial(() -> false);
+
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSend(Packet<?> packet, @Nullable PacketSendListener packetSendListener, CallbackInfo info) {
-        if (packet instanceof ClientboundPlayerChatPacket chat) {
+        if (!e4all$converting.get() && packet instanceof ClientboundPlayerChatPacket chat) {
             info.cancel();
             Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
-            ((Connection) (Object) this).send(systemPacket, packetSendListener);
+            e4all$converting.set(true);
+            try {
+                ((Connection) (Object) this).send(systemPacket, packetSendListener);
+            } finally {
+                e4all$converting.set(false);
+            }
         }
     }
 
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;Z)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSend3(Packet<?> packet, @Nullable PacketSendListener packetSendListener, boolean flush, CallbackInfo info) {
-        if (packet instanceof ClientboundPlayerChatPacket chat) {
+        if (!e4all$converting.get() && packet instanceof ClientboundPlayerChatPacket chat) {
             info.cancel();
             Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
-            ((Connection) (Object) this).send(systemPacket, packetSendListener, flush);
+            e4all$converting.set(true);
+            try {
+                ((Connection) (Object) this).send(systemPacket, packetSendListener, flush);
+            } finally {
+                e4all$converting.set(false);
+            }
         }
     }
 

@@ -24,6 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import javax.crypto.Cipher;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 
 @Mixin(Connection.class)
 public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
@@ -62,7 +63,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    @ModifyArg(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;"))
+    @ModifyArg(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;"), require = 0)
     private static Class hijackChannel(Class clazz) {
         if (e4mc$smuggledDialtoneAddress.get() != null) {
             return DialtoneChannel.class;
@@ -71,7 +72,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    @ModifyArg(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;"))
+    @ModifyArg(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;"), require = 0)
     private static EventLoopGroup hijackGroup(EventLoopGroup group) {
         if (e4mc$smuggledDialtoneAddress.get() != null) {
             return DialtoneAmbientSession.INSTANCE.group;
@@ -80,7 +81,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    @WrapOperation(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;connect(Ljava/net/InetAddress;I)Lio/netty/channel/ChannelFuture;"))
+    @WrapOperation(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;connect(Ljava/net/InetAddress;I)Lio/netty/channel/ChannelFuture;"), require = 0)
     private static ChannelFuture hijackConnect(Bootstrap instance, InetAddress inetHost, int inetPort, Operation<ChannelFuture> operation) {
         if (e4mc$smuggledDialtoneAddress.get() != null) {
             var ret = instance.connect(e4mc$smuggledDialtoneAddress.get());
@@ -89,6 +90,26 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         } else {
             return operation.call(instance, inetHost, inetPort);
         }
+    }
+
+    // MC 26.1.2+ changed Connection.connect() to call Bootstrap.connect(SocketAddress)
+    // instead of Bootstrap.connect(InetAddress, int). This overload handles that signature.
+    @WrapOperation(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;connect(Ljava/net/SocketAddress;)Lio/netty/channel/ChannelFuture;"), require = 0)
+    private static ChannelFuture hijackConnectSocketAddress(Bootstrap instance, SocketAddress remoteAddress, Operation<ChannelFuture> operation) {
+        if (e4mc$smuggledDialtoneAddress.get() != null) {
+            var ret = instance.connect(e4mc$smuggledDialtoneAddress.get());
+            e4mc$smuggledDialtoneAddress.remove();
+            return ret;
+        } else {
+            return operation.call(instance, remoteAddress);
+        }
+    }
+
+    // Safety net: ensure the ThreadLocal is always cleaned up at the end of the connect
+    // method, even if the @WrapOperation hooks didn't fire (e.g., on an unknown MC version).
+    @Inject(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At("RETURN"), require = 0)
+    private static void e4all$cleanupSmuggledAddress(CallbackInfoReturnable<?> cir) {
+        e4mc$smuggledDialtoneAddress.remove();
     }
 
     @Inject(method = "/^(setEncryptionKey|method_10746|m_129506_)$/", at = @At("HEAD"), cancellable = true, require = 0)

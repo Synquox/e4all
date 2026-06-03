@@ -36,7 +36,7 @@ public abstract class ServerConnectionListenerMixin {
         return group;
     }
 
-    @Inject(method = "startTcpServerListener", at = @At(value = "TAIL"), require = 0)
+    @Inject(method = "/^(startTcpServerListener|method_14354|m_9711_)$/", at = @At(value = "TAIL"), require = 0)
     private void interceptGroup(InetAddress inetAddress, int i, CallbackInfo ci) {
         boolean realE4mcInstalled = false;
         try {

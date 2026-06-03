@@ -141,7 +141,7 @@ public class Mirror {
         } else {
             return new HoverEvent(HoverEvent.Action.SHOW_TEXT, text);
         }
-        throw new RuntimeException("Could not locate any way to make a ClickEvent!");
+        throw new RuntimeException("Could not locate any way to make a HoverEvent!");
     }
 
     public static Component withStyle(Component component, UnaryOperator<Style> operator) {

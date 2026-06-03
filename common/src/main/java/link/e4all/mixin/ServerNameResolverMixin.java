@@ -45,6 +45,12 @@ public class ServerNameResolverMixin {
                 } if (inner.isPresent()) {
                     return inner;
                 } else if (serverAddress.getPort() == 25565) {
+                    // Skip DNS TXT lookup for raw IP addresses — they never have
+                    // TXT records and the lookup blocks for the full timeout (5s).
+                    String host = serverAddress.getHost();
+                    if (host != null && (host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$") || host.startsWith("[") || host.contains(":"))) {
+                        return Optional.empty();
+                    }
                     try {
                         Attributes attributes = dirContext.getAttributes(serverAddress.getHost(), new String[]{"TXT"});
                         Attribute attribute = attributes.get("TXT");
@@ -56,6 +62,7 @@ public class ServerNameResolverMixin {
                                     var resolverAddr = str.substring(23);
                                     if (!serverAddress.getHost().endsWith(resolverAddr)) {
                                         E4allClient.LOGGER.warn("Ignoring resolver addr {} as it's not a suffix of the target address", resolverAddr);
+                                        continue;
                                     }
                                     var request = HttpRequest
                                             .newBuilder(new URI("https", resolverAddr, "/.well-known/dialtone_ticket/" + serverAddress.getHost(), null))
