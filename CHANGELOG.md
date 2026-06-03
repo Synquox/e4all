@@ -1,6 +1,7 @@
 # Changelog
 
 ### 1.5.1
+*(Note: Most of these issues were introduced in the unreleased 1.5.0 version and have been resolved before public release)*
 * Fixed connection issues on Minecraft 1.20.5+ by supporting the new Netty connection format.
 * Fixed compatibility with Simple Voice Chat (no longer shows disconnected icon).
 * Fixed game crashes/freezes on certain MC versions (improved mixin compatibility).
