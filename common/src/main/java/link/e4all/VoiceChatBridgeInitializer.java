@@ -36,18 +36,18 @@ public class VoiceChatBridgeInitializer extends ChannelInitializer<Channel> {
 
         // Then, if the voice chat bridge is enabled, add our handler
         if (Config.INSTANCE.voiceChatBridgeEnabled.value()) {
-            // Schedule adding our handler after the pipeline is fully initialized
-            // (the original handler may itself be a ChannelInitializer that runs later)
-            ch.eventLoop().execute(() -> {
-                try {
-                    if (ch.isActive() || ch.isOpen()) {
+            try {
+                if (ch.isActive() || ch.isOpen()) {
+                    if (ch.pipeline().get("packet_handler") != null) {
+                        ch.pipeline().addBefore("packet_handler", "e4all_voicebridge", new VoiceChatBridgeHandler(isServerSide));
+                    } else {
                         ch.pipeline().addLast("e4all_voicebridge", new VoiceChatBridgeHandler(isServerSide));
-                        LOGGER.debug("Added voice chat bridge handler to {} pipeline", isServerSide ? "server" : "client");
                     }
-                } catch (Exception e) {
-                    LOGGER.debug("Could not add voice chat bridge handler", e);
+                    LOGGER.debug("Added voice chat bridge handler to {} pipeline", isServerSide ? "server" : "client");
                 }
-            });
+            } catch (Exception e) {
+                LOGGER.debug("Could not add voice chat bridge handler", e);
+            }
         }
     }
 }

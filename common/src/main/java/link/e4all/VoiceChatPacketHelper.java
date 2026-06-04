@@ -329,6 +329,20 @@ public class VoiceChatPacketHelper {
                                 }
                             } catch (NoSuchMethodException ignored) {}
                         }
+                        
+                        // Fallback: Serialize the payload using its write() method
+                        for (String writeMethodName : new String[]{"write", "m_293152_"}) {
+                            try {
+                                Method writeMethod = result.getClass().getMethod(writeMethodName, friendlyByteBufClass);
+                                ByteBuf newRawBuf = Unpooled.buffer();
+                                Object newFriendlyBuf = friendlyByteBufConstructor.newInstance(newRawBuf);
+                                writeMethod.invoke(result, newFriendlyBuf);
+                                byte[] data = new byte[newRawBuf.readableBytes()];
+                                newRawBuf.readBytes(data);
+                                newRawBuf.release();
+                                return data;
+                            } catch (NoSuchMethodException ignored) {}
+                        }
                     }
                 } catch (NoSuchMethodException ignored) {}
             }

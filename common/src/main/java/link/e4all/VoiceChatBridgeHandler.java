@@ -123,15 +123,15 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
         // so the client's e4all handler knows to use its local proxy
         byte[] rewritten = VoiceChatPacketHelper.rewriteSecretPacket(data, svcPort, "e4all-vc-bridge");
         if (rewritten != null) {
-            sendModifiedSecretPacket(ctx, rewritten, promise);
+            sendModifiedSecretPacket(ctx, rewritten, msg, promise);
         } else {
             LOGGER.warn("Failed to rewrite SecretPacket, passing through unchanged");
             super.write(ctx, msg, promise);
         }
     }
 
-    private void sendModifiedSecretPacket(ChannelHandlerContext ctx, byte[] newData, ChannelPromise promise) throws Exception {
-        Object packet = buildSecretPacket(newData);
+    private void sendModifiedSecretPacket(ChannelHandlerContext ctx, byte[] newData, Object originalPacket, ChannelPromise promise) throws Exception {
+        Object packet = buildSecretPacket(newData, originalPacket);
         if (packet != null) {
             ctx.write(packet, promise);
         } else {
@@ -174,7 +174,7 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
             // Rewrite the SecretPacket to point to our local proxy
             byte[] rewritten = VoiceChatPacketHelper.rewriteSecretPacket(data, proxyPort, "127.0.0.1");
             if (rewritten != null) {
-                Object packet = buildSecretPacket(rewritten);
+                Object packet = buildSecretPacket(rewritten, msg);
                 if (packet != null) {
                     ctx.fireChannelRead(packet);
                 } else {
@@ -195,17 +195,51 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
      * Build a voicechat:secret custom payload packet with the given data.
      * Uses shared reflection helpers from VoiceChatPacketHelper.
      */
-    private Object buildSecretPacket(byte[] newData) {
+    private Object buildSecretPacket(byte[] newData, Object originalPacket) {
         VoiceChatPacketHelper.initReflection();
         ByteBuf rawBuf = null;
         Object friendlyBuf = null;
         try {
-            Object rl = VoiceChatPacketHelper.makeResourceLocation("voicechat", "secret");
             rawBuf = Unpooled.wrappedBuffer(newData);
-
             Class<?> friendlyBufClass = Class.forName(VoiceChatPacketHelper.findFriendlyByteBufClassName());
             friendlyBuf = friendlyBufClass.getConstructor(ByteBuf.class).newInstance(rawBuf);
 
+            // First, try 1.20.2+ approach using the original packet's payload object
+            try {
+                Object payload = null;
+                for (String methodName : new String[]{"payload", "getPayload"}) {
+                    try {
+                        java.lang.reflect.Method m = originalPacket.getClass().getMethod(methodName);
+                        payload = m.invoke(originalPacket);
+                        if (payload != null) break;
+                    } catch (NoSuchMethodException ignored) {}
+                }
+
+                if (payload != null) {
+                    Object newPayload = null;
+                    for (java.lang.reflect.Constructor<?> ctor : payload.getClass().getConstructors()) {
+                        Class<?>[] params = ctor.getParameterTypes();
+                        if (params.length == 1 && params[0].isAssignableFrom(friendlyBufClass)) {
+                            newPayload = ctor.newInstance(friendlyBuf);
+                            break;
+                        }
+                    }
+                    if (newPayload != null) {
+                        for (java.lang.reflect.Constructor<?> ctor : originalPacket.getClass().getConstructors()) {
+                            Class<?>[] params = ctor.getParameterTypes();
+                            if (params.length == 1 && params[0].isAssignableFrom(newPayload.getClass())) {
+                                Object packet = ctor.newInstance(newPayload);
+                                rawBuf = null;
+                                friendlyBuf = null;
+                                return packet;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // Fallback to pre-1.20.2 approach
+            Object rl = VoiceChatPacketHelper.makeResourceLocation("voicechat", "secret");
             Class<?> packetClass = VoiceChatPacketHelper.findS2CPayloadClass();
             for (java.lang.reflect.Constructor<?> ctor : packetClass.getConstructors()) {
                 Class<?>[] params = ctor.getParameterTypes();
