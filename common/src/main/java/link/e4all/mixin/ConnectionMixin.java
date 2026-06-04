@@ -56,15 +56,15 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    @Inject(method = "/^(connect|method_52271|m_290025_)$/", at = @At("HEAD"), require = 0)
-    private static void hijackStartVoid(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfo ci) {
+    @Surrogate
+    private static void hijackStart(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress = new DialtoneAddress(smuggledAddress.ticket);
         }
     }
 
     @Surrogate
-    private static void hijackStartVoid(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfo ci) {
+    private static void hijackStart(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress = new DialtoneAddress(smuggledAddress.ticket);
         }
