@@ -139,17 +139,17 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    // Add client-side voice chat bridge handler to DialtoneChannel connections
+    // Add client-side voice chat bridge handler to ALL connections
     @Inject(method = "channelActive", at = @At("TAIL"), require = 0)
     private void e4all$addVoiceBridgeOnActive(ChannelHandlerContext ctx, CallbackInfo ci) {
-        if (channel instanceof DialtoneChannel && Config.INSTANCE.voiceChatBridgeEnabled.value()) {
+        if (Config.INSTANCE.voiceChatBridgeEnabled.value()) {
             try {
                 if (channel.pipeline().get("packet_handler") != null) {
                     channel.pipeline().addBefore("packet_handler", "e4all_voicebridge", new VoiceChatBridgeHandler(false));
                 } else {
                     channel.pipeline().addLast("e4all_voicebridge", new VoiceChatBridgeHandler(false));
                 }
-                E4allClient.LOGGER.debug("Added client-side voice chat bridge to DialtoneChannel");
+                E4allClient.LOGGER.debug("Added client-side voice chat bridge to connection");
             } catch (Exception e) {
                 E4allClient.LOGGER.debug("Could not add client voice chat bridge", e);
             }

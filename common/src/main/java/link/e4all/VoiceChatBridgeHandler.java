@@ -45,7 +45,7 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
         // Server side: only intercept SecretPackets for DialtoneChannel connections
         // where SVC is actually running. Relay clients don't have e4all's client
         // handler, so modifying their SecretPacket would break voice chat.
-        if (isServerSide && isActiveDialtoneConnection(ctx.channel())
+        if (isServerSide && isTunneledConnection(ctx.channel())
                 && VoiceChatBridge.getVoiceChatPort() > 0
                 && VoiceChatPacketHelper.isCustomPayloadPacket(msg)) {
             String channel = VoiceChatPacketHelper.getPayloadChannel(msg);
@@ -78,11 +78,11 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
     }
 
     /**
-     * Check if the channel is a DialtoneChannel (peer-to-peer, client has e4all)
+     * Check if the channel is a tunneled connection (peer-to-peer Dialtone or proxy QuicStream)
      * AND is fully connected (stream is ready).
      */
-    private boolean isActiveDialtoneConnection(Channel channel) {
-        return channel instanceof DialtoneChannel && channel.isActive();
+    private boolean isTunneledConnection(Channel channel) {
+        return (channel instanceof DialtoneChannel || channel instanceof io.netty.incubator.codec.quic.QuicStreamChannel) && channel.isActive();
     }
 
     /**

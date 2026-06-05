@@ -1,27 +1,19 @@
 # Changelog
 
-### 1.5.1
-*(Note: Most of these issues were introduced in the unreleased 1.5.0 version and have been resolved before public release)*
-* Fixed connection issues on Minecraft 1.20.5+ by supporting the new Netty connection format.
-* Fixed compatibility with Simple Voice Chat (no longer shows disconnected icon).
-* Fixed game crashes/freezes on certain MC versions (improved mixin compatibility).
-* Fixed a memory/connection leak that could corrupt subsequent connections.
-* Fixed a potential infinite recursion/crash with No-Chat-Reports.
-* Fixed a DNS suffix security check bypass.
-* Performance and minor improvements (cached addresses, optimized DNS queries, and error formatting fixes).
-
-### 1.5.0
-* Added a built-in No-Chat-Reports feature so player signatures are stripped automatically when Offline Mode is active. No more annoying warnings.
-* Automatically turns off secure profiles when opening a LAN server in offline mode.
-* Cleaned up and simplified packet code across all supported versions from 1.18 to 1.20.
-
-### 1.4.0
-* Added an "Online Mode" toggle button to the "Open to LAN" screen for Forge, Fabric, and NeoForge (Minecraft 1.20.1/1.20.2+).
-* Added red warning messages in chat if you start a LAN server with Offline Mode turned on.
-* Fixed a Fabric crash at startup caused by a Mixin target issue.
-* Fixed a bug on Forge where the Online Mode button silently failed to show up.
-* Cleaned up unused and redundant mixins that were causing compiler and remapper warnings.
-* Fixed some annoying Netty network errors (NPEs and double-read buffer issues) in Dialtone code.
+### 1.5.2
+* **Major Netty & Voice Chat Overhaul:**
+  * Fixed TCP timeout issues and Ghost Servers on Minecraft 26.1.x (Netty 4.2) by rewriting the `VoiceChatBridgeInitializer` to comply with Netty 4.2's `@Sharable` limitations.
+  * Fixed Simple Voice Chat bridge for proxy connections! You can now use voice chat over the public proxy IP, not just peer-to-peer (Dialtone) connections.
+  * Fixed a pipeline race condition that caused Voice Chat data to be silently dropped on all versions.
+* **Offline Mode & UI Improvements (from 1.4.0/1.5.0):**
+  * Added an "Online Mode" toggle button directly to the "Open to LAN" screen for Forge, Fabric, and NeoForge (Minecraft 1.20.1+).
+  * Built-in No-Chat-Reports: Player signatures are automatically stripped when Offline Mode is active, preventing annoying chat warnings. Secure profiles are automatically disabled.
+  * Added red warning messages in chat when starting a LAN server with Offline Mode enabled.
+* **Compatibility & Stability (from 1.4.0/1.5.1):**
+  * Fixed connection format issues on Minecraft 1.20.5+.
+  * Fixed multiple memory leaks, crashes, and Netty errors (NPEs, DecoderExceptions) related to Dialtone and packet handling.
+  * Fixed DNS suffix security check bypass.
+  * General performance improvements, cached addresses, optimized DNS queries, and unused Mixin cleanup.
 
 ### 1.3.0
 * Added Simple Voice Chat support! Voice chat now works fine over e4all tunneled connections.
