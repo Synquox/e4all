@@ -19,14 +19,14 @@
     "ncr.MixinPlayerList",
     "ncr.MixinServerboundChatCommandPacket",
     "ncr.MixinServerboundChatPacket",
-    "ncr.MixinServerboundChatSessionUpdatePacket"
+    "ncr.MixinServerboundChatSessionUpdatePacket",
+    "PlayerListMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "client": [
     "ClientHandshakePacketListenerImplMixin",
-    "PlayerListMixin",
     "ServerAddressMixin",
     "ServerNameResolverMixin",
     "ShareToLanScreenMixin"
