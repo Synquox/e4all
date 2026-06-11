@@ -67,12 +67,6 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
                 handleIncomingSecretPacket(ctx, msg);
                 return;
             }
-
-            // Both sides: handle e4all voice data packets
-            if (VoiceChatPacketHelper.VOICE_DATA_CHANNEL.equals(channel)) {
-                handleVoiceData(ctx, msg);
-                return;
-            }
         }
         super.channelRead(ctx, msg);
     }
@@ -194,6 +188,10 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
     /**
      * Build a voicechat:secret custom payload packet with the given data.
      * Uses shared reflection helpers from VoiceChatPacketHelper.
+     *
+     * Supports both pre-1.20.2 (ResourceLocation + FriendlyByteBuf constructor)
+     * and 1.20.2+ (payload().type() system with either FriendlyByteBuf ctor
+     * or no-arg ctor + fromBytes/read).
      */
     private Object buildSecretPacket(byte[] newData, Object originalPacket) {
         VoiceChatPacketHelper.initReflection();
@@ -217,6 +215,8 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
 
                 if (payload != null) {
                     Object newPayload = null;
+
+                    // Approach A: Try a 1-arg FriendlyByteBuf constructor
                     for (java.lang.reflect.Constructor<?> ctor : payload.getClass().getConstructors()) {
                         Class<?>[] params = ctor.getParameterTypes();
                         if (params.length == 1 && params[0].isAssignableFrom(friendlyBufClass)) {
@@ -224,6 +224,36 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
                             break;
                         }
                     }
+
+                    // Approach B: No-arg constructor + fromBytes(buf) / read(buf)
+                    // SVC 1.20.2+ uses this pattern instead of a FriendlyByteBuf ctor
+                    if (newPayload == null) {
+                        try {
+                            java.lang.reflect.Constructor<?> noArgCtor = payload.getClass().getDeclaredConstructor();
+                            noArgCtor.setAccessible(true);
+                            Object tempPayload = noArgCtor.newInstance();
+                            for (String readMethod : new String[]{"fromBytes", "read"}) {
+                                try {
+                                    // Try with FriendlyByteBuf parameter type
+                                    java.lang.reflect.Method m = payload.getClass().getMethod(readMethod, friendlyBufClass);
+                                    Object result = m.invoke(tempPayload, friendlyBuf);
+                                    // fromBytes returns 'this' or a new instance
+                                    newPayload = (result != null) ? result : tempPayload;
+                                    break;
+                                } catch (NoSuchMethodException ignored) {}
+                                try {
+                                    // Try with ByteBuf supertype
+                                    java.lang.reflect.Method m = payload.getClass().getMethod(readMethod, io.netty.buffer.ByteBuf.class);
+                                    Object result = m.invoke(tempPayload, friendlyBuf);
+                                    newPayload = (result != null) ? result : tempPayload;
+                                    break;
+                                } catch (NoSuchMethodException ignored) {}
+                            }
+                        } catch (NoSuchMethodException ignored) {
+                            // No no-arg constructor available
+                        }
+                    }
+
                     if (newPayload != null) {
                         for (java.lang.reflect.Constructor<?> ctor : originalPacket.getClass().getConstructors()) {
                             Class<?>[] params = ctor.getParameterTypes();
@@ -236,7 +266,9 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
                         }
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                LOGGER.debug("1.20.2+ payload reconstruction failed, trying fallback", e);
+            }
 
             // Fallback to pre-1.20.2 approach
             Object rl = VoiceChatPacketHelper.makeResourceLocation("voicechat", "secret");
@@ -266,14 +298,13 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
     }
 
     /**
-     * Handle e4all:vc voice data packets.
+     * Called by {@link VoiceChatRawCodec} when a raw voice data frame is received.
      * On the host side: forward UDP data to the local SVC server.
      * On the client side: forward UDP data to the local SVC client.
+     *
+     * @param data raw UDP datagram bytes (magic header already stripped)
      */
-    private void handleVoiceData(ChannelHandlerContext ctx, Object msg) {
-        byte[] data = VoiceChatPacketHelper.getPayloadData(msg);
-        if (data == null) return;
-
+    public void handleRawVoiceData(byte[] data) {
         if (isServerSide && hostRelay != null) {
             hostRelay.onClientData(data);
         } else if (!isServerSide && clientProxy != null) {

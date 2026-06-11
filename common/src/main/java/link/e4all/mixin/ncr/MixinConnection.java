@@ -78,7 +78,7 @@ public abstract class MixinConnection {
             Method decorate = bound.getClass().getMethod("decorate", Component.class);
             Component content = chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
             return (Component) decorate.invoke(bound, content);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             if (player != null) {
                 try {
                     // Fallback approach (1.19.4): Registry resolution
@@ -105,13 +105,13 @@ public abstract class MixinConnection {
                         Component content = chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
                         return (Component) chatTypeInstance.getClass().getMethod("decorate", Component.class).invoke(chatTypeInstance, content);
                     }
-                } catch (Exception ignored) {}
+                } catch (Throwable ignored) {}
             }
             
             // Ultimate fallback: undecorated text content
             try {
                 return chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
-            } catch (Exception ignored) {
+            } catch (Throwable ignored) {
                 return Component.literal("");
             }
         }

@@ -1,5 +1,9 @@
 # Changelog
 
+### 1.5.5
+* Fixed voice chat.
+* Fixed an issue that made 26.1.x for Fabric not work.
+
 ### 1.5.2
 * **Major Netty & Voice Chat Overhaul:**
   * Fixed TCP timeout issues and Ghost Servers on Minecraft 26.1.x (Netty 4.2) by rewriting the `VoiceChatBridgeInitializer` to comply with Netty 4.2's `@Sharable` limitations.

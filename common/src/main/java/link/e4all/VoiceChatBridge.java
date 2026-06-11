@@ -35,12 +35,14 @@ public class VoiceChatBridge {
             Class<?> voicechatClass = Class.forName("de.maxhenkel.voicechat.Voicechat");
             Object serverVoiceEvents = voicechatClass.getField("SERVER").get(null);
             if (serverVoiceEvents == null) {
-                cachedVoiceChatPort = -1;
+                // SVC hasn't initialized its SERVER field yet — don't cache, retry later
+                LOGGER.debug("SVC SERVER field is null (not ready yet), will retry");
                 return -1;
             }
             Object server = serverVoiceEvents.getClass().getMethod("getServer").invoke(serverVoiceEvents);
             if (server == null) {
-                cachedVoiceChatPort = -1;
+                // SVC server object hasn't been created yet — don't cache, retry later
+                LOGGER.debug("SVC server object is null (not ready yet), will retry");
                 return -1;
             }
             int port = (int) server.getClass().getMethod("getPort").invoke(server);

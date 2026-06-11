@@ -57,12 +57,26 @@ public class VoiceChatBridgeInitializer extends ChannelInboundHandlerAdapter {
         Channel ch = ctx.channel();
         if (Config.INSTANCE.voiceChatBridgeEnabled.value()) {
             try {
+                VoiceChatBridgeHandler bridgeHandler = new VoiceChatBridgeHandler(isServerSide);
+
+                // Add the bridge handler (intercepts SecretPacket at the Minecraft packet level)
                 if (ch.pipeline().get("packet_handler") != null) {
-                    ch.pipeline().addBefore("packet_handler", "e4all_voicebridge", new VoiceChatBridgeHandler(isServerSide));
+                    ch.pipeline().addBefore("packet_handler", "e4all_voicebridge", bridgeHandler);
                     LOGGER.debug("Added voice chat bridge handler to {} pipeline", isServerSide ? "server" : "client");
                 } else {
-                    ch.pipeline().addLast("e4all_voicebridge", new VoiceChatBridgeHandler(isServerSide));
+                    ch.pipeline().addLast("e4all_voicebridge", bridgeHandler);
                     LOGGER.debug("Added voice chat bridge handler to {} pipeline (at end, packet_handler not found)", isServerSide ? "server" : "client");
+                }
+
+                // Add the raw codec right after the "splitter" (VarInt length-field decoder).
+                // This intercepts complete ByteBuf frames before they reach decompress or
+                // decoder, preventing the decompressor from corrupting our voice data.
+                if (ch.pipeline().get("splitter") != null) {
+                    ch.pipeline().addAfter("splitter", "e4all_vc_raw_codec", new VoiceChatRawCodec(bridgeHandler));
+                    LOGGER.debug("Added voice chat raw codec after splitter");
+                } else if (ch.pipeline().get("decoder") != null) {
+                    ch.pipeline().addBefore("decoder", "e4all_vc_raw_codec", new VoiceChatRawCodec(bridgeHandler));
+                    LOGGER.debug("Added voice chat raw codec before decoder (splitter not found)");
                 }
             } catch (Exception e) {
                 LOGGER.debug("Could not add voice chat bridge handler", e);

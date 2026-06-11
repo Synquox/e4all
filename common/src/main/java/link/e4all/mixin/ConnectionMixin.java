@@ -8,6 +8,7 @@ import link.e4all.Config;
 import link.e4all.DialtoneConnectionExtensions;
 import link.e4all.E4allClient;
 import link.e4all.VoiceChatBridgeHandler;
+import link.e4all.VoiceChatRawCodec;
 import link.e4all.SmugglersInetSocketAddress;
 import link.e4all.dialtone.DialtoneAddress;
 import link.e4all.dialtone.DialtoneAmbientSession;
@@ -144,11 +145,22 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private void e4all$addVoiceBridgeOnActive(ChannelHandlerContext ctx, CallbackInfo ci) {
         if (Config.INSTANCE.voiceChatBridgeEnabled.value()) {
             try {
+                VoiceChatBridgeHandler bridgeHandler = new VoiceChatBridgeHandler(false);
+
                 if (channel.pipeline().get("packet_handler") != null) {
-                    channel.pipeline().addBefore("packet_handler", "e4all_voicebridge", new VoiceChatBridgeHandler(false));
+                    channel.pipeline().addBefore("packet_handler", "e4all_voicebridge", bridgeHandler);
                 } else {
-                    channel.pipeline().addLast("e4all_voicebridge", new VoiceChatBridgeHandler(false));
+                    channel.pipeline().addLast("e4all_voicebridge", bridgeHandler);
                 }
+
+                // Add the raw codec after the splitter so voice frames are intercepted
+                // before they reach decompress or decoder
+                if (channel.pipeline().get("splitter") != null) {
+                    channel.pipeline().addAfter("splitter", "e4all_vc_raw_codec", new VoiceChatRawCodec(bridgeHandler));
+                } else if (channel.pipeline().get("decoder") != null) {
+                    channel.pipeline().addBefore("decoder", "e4all_vc_raw_codec", new VoiceChatRawCodec(bridgeHandler));
+                }
+
                 E4allClient.LOGGER.debug("Added client-side voice chat bridge to connection");
             } catch (Exception e) {
                 E4allClient.LOGGER.debug("Could not add client voice chat bridge", e);

@@ -34,6 +34,12 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
             if (!HAS_SIGNATURES) {
                 return false;
             }
+            try {
+                // If the target class is entirely missing/moved in newer versions, skip
+                Class.forName(targetClassName, false, this.getClass().getClassLoader());
+            } catch (Throwable e) {
+                return false; // Safely disable this mixin to prevent crash
+            }
         }
         return true;
     }

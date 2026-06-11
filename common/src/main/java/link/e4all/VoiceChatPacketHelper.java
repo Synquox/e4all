@@ -10,21 +10,20 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Reflection-based helper to construct and parse Minecraft custom payload packets
  * across versions (1.18 - 1.21+).
  *
- * Uses the channel identifier "e4all:vc" for voice chat data relay.
+ * Voice chat data is now sent as raw ByteBuf frames with a magic header,
+ * bypassing the Minecraft payload system entirely (see {@link VoiceChatRawCodec}).
  *
- * Also handles intercepting SVC's "voicechat:secret" packets to rewrite
- * the voice host and port for tunneled connections.
+ * This class still handles intercepting SVC's "voicechat:secret" packets to
+ * rewrite the voice host and port for tunneled connections.
  */
 public class VoiceChatPacketHelper {
     private static final Logger LOGGER = LoggerFactory.getLogger("e4all-voicebridge");
 
-    public static final String VOICE_DATA_CHANNEL = "e4all:vc";
     public static final String SVC_SECRET_CHANNEL = "voicechat:secret";
 
     // Cached reflection lookups
@@ -47,9 +46,6 @@ public class VoiceChatPacketHelper {
     // For 1.20.2+ payload system
     private static boolean usePayloadSystem = false;
 
-    // Log once flags to prevent log spam from high-frequency voice packets
-    private static final AtomicBoolean payloadWarningLogged = new AtomicBoolean(false);
-    private static final AtomicBoolean noConstructorWarningLogged = new AtomicBoolean(false);
 
     static void initReflection() {
         if (reflectionInitialized) return;
@@ -177,55 +173,56 @@ public class VoiceChatPacketHelper {
     }
 
     /**
-     * Sends voice chat data through the Minecraft connection as a custom payload packet.
+     * Magic bytes that prefix all e4all voice data frames.
+     * Chosen to be unlikely to collide with any Minecraft packet ID or valid data.
+     * The receiver (VoiceChatRawCodec) scans for this prefix before the Minecraft
+     * decoder sees the data.
+     */
+    public static final int VOICE_FRAME_MAGIC = 0xE4A11BED;
+
+    /**
+     * Sends voice chat data through the Minecraft connection by writing a raw
+     * length-prefixed ByteBuf directly through the Netty pipeline, bypassing
+     * the Minecraft packet encoder/decoder.
      *
-     * For MC 1.20.2+ with the payload system, this constructs the packet via reflection
-     * using available constructors. If no suitable constructor is found (unregistered
-     * payload type would crash the codec), the data is NOT sent and a warning is logged.
+     * This avoids the 1.20.2+ payload registration requirement. The frame is
+     * picked up on the other end by {@link VoiceChatRawCodec} which sits after
+     * the splitter but before the Minecraft decoder in the pipeline.
+     *
+     * Frame format (before the VarInt length-prefix added by the "prepender"):
+     *   int32  VOICE_FRAME_MAGIC  (4 bytes, 0xE4A11BED)
+     *   byte[] voiceData          (remaining bytes)
+     *
+     * We write via the ChannelHandlerContext of the "encoder" handler so the
+     * frame bypasses the encoder (which would try to cast it to a Packet) but
+     * still flows through the "compress" and "prepender" handlers below it.
      *
      * @param channel     the Netty channel (Minecraft connection)
      * @param data        raw UDP datagram bytes
-     * @param serverToClient true if sending S2C, false for C2S
+     * @param serverToClient unused — framing is direction-agnostic
      */
     public static void sendVoiceData(Channel channel, byte[] data, boolean serverToClient) {
-        initReflection();
-        try {
-            Constructor<?> ctor = serverToClient ? s2cPayloadConstructor : c2sPayloadConstructor;
-            if (ctor != null) {
-                sendVoiceDataWithConstructor(channel, data, ctor);
-            } else if (usePayloadSystem) {
-                // MC 1.20.2+ without legacy constructors — can't send unregistered payloads
-                // through the Minecraft codec. Log once and bail.
-                if (payloadWarningLogged.compareAndSet(false, true)) {
-                    LOGGER.warn("Cannot send voice data: MC 1.20.2+ payload system requires registered payload types. " +
-                            "Voice chat bridge is not supported on this MC version without additional registration.");
-                }
-            } else {
-                if (noConstructorWarningLogged.compareAndSet(false, true)) {
-                    LOGGER.warn("No suitable constructor found for sending voice data packets");
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to send voice data packet", e);
-        }
-    }
+        ByteBuf frame = channel.alloc().buffer(4 + data.length);
+        frame.writeInt(VOICE_FRAME_MAGIC);
+        frame.writeBytes(data);
 
-    private static void sendVoiceDataWithConstructor(Channel channel, byte[] data, Constructor<?> ctor) throws Exception {
-        Object rl = makeResourceLocation("e4all", "vc");
-        ByteBuf rawBuf = null;
-        Object friendlyBuf = null;
-        try {
-            rawBuf = Unpooled.wrappedBuffer(data);
-            friendlyBuf = friendlyByteBufConstructor.newInstance(rawBuf);
-            Object packet = ctor.newInstance(rl, friendlyBuf);
-            rawBuf = null;
-            friendlyBuf = null;
-            channel.writeAndFlush(packet);
-        } finally {
-            if (friendlyBuf instanceof ByteBuf buf) {
-                buf.release();
-            } else if (rawBuf != null) {
-                rawBuf.release();
+        // Write through a context that bypasses both the encoder AND the compressor.
+        // On the receiver, the raw codec sits right after the splitter (before decompress),
+        // so the frame must arrive uncompressed for the magic header to be recognized.
+        //
+        // Pipeline outbound order: encoder → compress → prepender → network
+        // We write via the "compress" context so it goes: prepender → network
+        io.netty.channel.ChannelHandlerContext compressCtx = channel.pipeline().context("compress");
+        if (compressCtx != null) {
+            compressCtx.writeAndFlush(frame);
+        } else {
+            // No compressor (e.g. DialtoneChannel, or compression not yet enabled)
+            io.netty.channel.ChannelHandlerContext encoderCtx = channel.pipeline().context("encoder");
+            if (encoderCtx != null) {
+                encoderCtx.writeAndFlush(frame);
+            } else {
+                // Fallback for non-standard pipelines — write directly on the channel
+                channel.writeAndFlush(frame);
             }
         }
     }
