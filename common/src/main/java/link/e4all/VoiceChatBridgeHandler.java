@@ -76,7 +76,7 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
      * AND is fully connected (stream is ready).
      */
     private boolean isTunneledConnection(Channel channel) {
-        return (channel instanceof DialtoneChannel || channel instanceof io.netty.incubator.codec.quic.QuicStreamChannel) && channel.isActive();
+        return channel instanceof DialtoneChannel && channel.isActive();
     }
 
     /**
@@ -113,6 +113,38 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
             return;
         }
 
+        // Modify the SecretPacket in-place using Unsafe for 1.20.4+ records
+        boolean modified = false;
+        try {
+            Object payload = null;
+            for (String methodName : new String[]{"payload", "getPayload"}) {
+                try {
+                    java.lang.reflect.Method m = msg.getClass().getMethod(methodName);
+                    payload = m.invoke(msg);
+                    if (payload != null) break;
+                } catch (NoSuchMethodException ignored) {}
+            }
+            if (payload != null) {
+                java.lang.reflect.Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+                unsafeField.setAccessible(true);
+                sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+                
+                java.lang.reflect.Field portField = payload.getClass().getDeclaredField("serverPort");
+                java.lang.reflect.Field hostField = payload.getClass().getDeclaredField("voiceHost");
+                
+                unsafe.putInt(payload, unsafe.objectFieldOffset(portField), svcPort);
+                unsafe.putObject(payload, unsafe.objectFieldOffset(hostField), "e4all-vc-bridge");
+                modified = true;
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Failed to use Unsafe to modify SecretPayload in-place", e);
+        }
+
+        if (modified) {
+            super.write(ctx, msg, promise);
+            return;
+        }
+
         // Rewrite the SecretPacket: set voiceHost to "e4all-vc-bridge" marker
         // so the client's e4all handler knows to use its local proxy
         byte[] rewritten = VoiceChatPacketHelper.rewriteSecretPacket(data, svcPort, "e4all-vc-bridge");
@@ -129,8 +161,8 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
         if (packet != null) {
             ctx.write(packet, promise);
         } else {
-            LOGGER.warn("Could not reconstruct SecretPacket");
-            promise.setSuccess();
+            LOGGER.warn("Could not reconstruct SecretPacket, passing original");
+            ctx.write(originalPacket, promise);
         }
     }
 
@@ -164,6 +196,38 @@ public class VoiceChatBridgeHandler extends ChannelDuplexHandler {
             int proxyPort = clientProxy.getLocalPort();
             bridgeActive = true;
             LOGGER.info("Voice chat bridge active — SVC client will use local proxy on port {}", proxyPort);
+
+            // Modify the SecretPacket in-place using Unsafe for 1.20.4+ records
+            boolean modified = false;
+            try {
+                Object payload = null;
+                for (String methodName : new String[]{"payload", "getPayload"}) {
+                    try {
+                        java.lang.reflect.Method m = msg.getClass().getMethod(methodName);
+                        payload = m.invoke(msg);
+                        if (payload != null) break;
+                    } catch (NoSuchMethodException ignored) {}
+                }
+                if (payload != null) {
+                    java.lang.reflect.Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+                    unsafeField.setAccessible(true);
+                    sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+                    
+                    java.lang.reflect.Field portField = payload.getClass().getDeclaredField("serverPort");
+                    java.lang.reflect.Field hostField = payload.getClass().getDeclaredField("voiceHost");
+                    
+                    unsafe.putInt(payload, unsafe.objectFieldOffset(portField), proxyPort);
+                    unsafe.putObject(payload, unsafe.objectFieldOffset(hostField), "127.0.0.1");
+                    modified = true;
+                }
+            } catch (Exception e) {
+                LOGGER.debug("Failed to use Unsafe to modify SecretPayload in-place", e);
+            }
+            
+            if (modified) {
+                ctx.fireChannelRead(msg);
+                return;
+            }
 
             // Rewrite the SecretPacket to point to our local proxy
             byte[] rewritten = VoiceChatPacketHelper.rewriteSecretPacket(data, proxyPort, "127.0.0.1");

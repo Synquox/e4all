@@ -29,10 +29,10 @@ public class ServerLoginPacketListenerImplMixin {
 
     @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;usesAuthentication()Z"), require = 0)
     private boolean e4all$redirectUsesAuthentication(net.minecraft.server.MinecraftServer instance) {
+        if (connection.getRemoteAddress() instanceof DialtoneAddress) {
+            return true;
+        }
         if (link.e4all.Config.INSTANCE.offlineMode.value()) {
-            if (connection.getRemoteAddress() instanceof DialtoneAddress) {
-                return true;
-            }
             return false;
         }
         return instance.usesAuthentication();
@@ -40,6 +40,9 @@ public class ServerLoginPacketListenerImplMixin {
 
     @ModifyArg(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ClientboundHelloPacket;<init>(Ljava/lang/String;[B[BZ)V"), index = 3, require = 0)
     private boolean e4all$modifyNeedsAuthentication(boolean needsAuth) {
+        if (connection.getRemoteAddress() instanceof DialtoneAddress) {
+            return true;
+        }
         if (link.e4all.Config.INSTANCE.offlineMode.value()) {
             return false;
         }
