@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.5.5
+### 1.5.4
 * Fixed voice chat.
 * Fixed an issue that made 26.1.x for Fabric not work.
 
