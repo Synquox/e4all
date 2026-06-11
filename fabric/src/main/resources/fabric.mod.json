@@ -25,7 +25,8 @@
     "e4all.mixins.json"
   ],
   "depends": {
-    "fabric": "*",
+    "fabricloader": ">=0.14.0",
+    "fabric-api": "*",
     "minecraft": ">=1.18"
   },
   "provides": [
