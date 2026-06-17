@@ -128,9 +128,11 @@ public class VoiceChatPacketHelper {
     }
 
     static Class<?> findClass(String... names) throws ClassNotFoundException {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader(); // ponytail: netty threads may lack cl
+        if (cl == null) cl = ClassLoader.getSystemClassLoader();
         for (String name : names) {
             try {
-                return Class.forName(name);
+                return Class.forName(name, true, cl);
             } catch (ClassNotFoundException ignored) {}
         }
         throw new ClassNotFoundException("Could not find any of the specified classes");

@@ -114,6 +114,7 @@ public class DialtoneServerChannel extends AbstractServerChannel {
             preconn.thenAccept(conn -> {
                 E4allClient.LOGGER.info("conn accepted, dialtone child pre-active");
                 channel.connection = conn;
+                channel.cachedRemoteAddress = new DialtoneAddress(conn.peerAddress()); // ponytail: server-side needs this for ban list
                 conn.acceptBi().thenAccept(bidi -> {
                     E4allClient.LOGGER.info("bidi accepted, dialtone child active");
                     channel.stream = bidi;

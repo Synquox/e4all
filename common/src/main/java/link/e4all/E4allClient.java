@@ -18,6 +18,7 @@ public class E4allClient {
 
     public static void init() {
         Config.INSTANCE.id(); // Touch to initialize for McQoy
+        VoiceChatPacketHelper.initReflection(); // ponytail: init on main thread before netty threads need it
         try {
             if (!PoisonPill.checkMotw()) {
                 badurl = true;

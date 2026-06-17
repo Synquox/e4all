@@ -24,7 +24,7 @@ public class DialtoneChannel extends AbstractChannel {
     AtomicBoolean readInFlight = new AtomicBoolean(false);
     AtomicBoolean writeInFlight = new AtomicBoolean(false);
     private volatile SocketAddress cachedLocalAddress;
-    private volatile SocketAddress cachedRemoteAddress;
+    volatile SocketAddress cachedRemoteAddress;
 
     public DialtoneChannel() {
         super(null);
