@@ -80,8 +80,16 @@ public class VoiceChatPacketHelper {
                         "net.minecraft.network.packet.c2s.play.CustomPayloadC2SPacket",
                         "net.minecraft.class_2817"
                     );
-                    s2cPayloadConstructor = s2cPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
-                    c2sPayloadConstructor = c2sPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
+                    try {
+                        s2cPayloadConstructor = s2cPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
+                    } catch (NoSuchMethodException ignored) {
+                        s2cPayloadConstructor = null;
+                    }
+                    try {
+                        c2sPayloadConstructor = c2sPayloadClass.getConstructor(resourceLocationClass, friendlyByteBufClass);
+                    } catch (NoSuchMethodException ignored) {
+                        c2sPayloadConstructor = null;
+                    }
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to initialize voice chat packet reflection", e);
