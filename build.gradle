@@ -48,6 +48,7 @@ allprojects {
         maven { url "https://maven.neoforged.net/releases/" }
         maven { url 'https://repo.sleeping.town/' }
         maven { url 'https://maven.is-quite.gay/' }
+        maven { url "https://maven.maxhenkel.de/repository/public" }
     }
 
     tasks.withType(JavaCompile) {

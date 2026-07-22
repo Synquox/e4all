@@ -308,7 +308,12 @@ public class QuiclimeSession {
                 }
                 datagramChannel = (DatagramChannel) ((ChannelFuture) datagramChannelFuture).channel();
                 QuicChannel.newBootstrap(datagramChannel)
-                        .streamHandler(handler)
+                        .streamHandler(new ChannelInitializer<QuicStreamChannel>() {
+                            @Override
+                            protected void initChannel(QuicStreamChannel ch) {
+                                ch.pipeline().addLast("voiceRouter", new link.e4all.voice.VoiceStreamRouter(handler));
+                            }
+                        })
                         .handler(new ChannelInboundHandlerAdapter() {
                             @Override
                             public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {

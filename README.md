@@ -24,6 +24,7 @@ Just like the original, e4all is a reverse tunneling proxy for Minecraft. It all
 
 ### Features
 * Offline Account Support: The main reason for this fork. You can now toggle **online-mode on or off** directly in the LAN menu.
+* Built-in Voice Chat: Native support for Simple Voice Chat (SVC). Voice chat works out of the box when you host via e4all without needing any extra proxy addons.
 * No Configuration Required: No accounts, no external software like Hamachi, and no complex setup.
 * Join with Vanilla Clients: Only the host needs to install the mod. Friends can join using a standard Minecraft client by pasting your custom domain into "Direct Connection."
 * Bypass Network Restrictions: Works behind CGNAT, firewalls, and restrictive routers.
@@ -46,6 +47,9 @@ Please contribute
 
 ### Compatibility
 e4all is a standalone mod. While it includes the functionality of e4mc, it is recommended to use e4all by itself because I haven't tested it together with e4mc and it really doesn't help to have both installed.
+
+### e4mc Voice Chat Addon
+If you are using the original e4mc and want Voice Chat support without switching to e4all, check out the addon I made for it: [e4mc-vc-addon](https://github.com/Synquox/e4mc-vc-addon).
 
 ---
 
