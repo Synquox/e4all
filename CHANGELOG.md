@@ -1,5 +1,8 @@
 # Changelog
  
+### 2.0.0-alpha
+* Voice chat integration
+
 ### 1.6.4
 * **Fixes:**
   * Improved offline mode compatibility by injecting into server authentication checks and adding missing yarn mapping redirects.
