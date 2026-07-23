@@ -14,7 +14,7 @@ public final class RawUdpPacketImpl implements RawUdpPacket {
         this.address = address;
     }
 
-    @Override public byte[] getData() { return data; }
+    @Override public byte[] getData() { return data.clone(); }
     @Override public long getTimestamp() { return timestamp; }
     @Override public SocketAddress getSocketAddress() { return address; }
 }

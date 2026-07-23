@@ -3,6 +3,7 @@ package link.e4all.voice;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
@@ -24,28 +25,28 @@ public class VoiceStreamRouter extends ByteToMessageDecoder {
         if (in.readableBytes() < 1) return;
 
         routed = true;
-        byte magic = in.readByte();
+        byte magic = in.getByte(in.readerIndex());
+
+        ChannelPipeline pipeline = ctx.pipeline();
 
         if (magic == VoiceFraming.VOICE_MAGIC) {
-            E4allClient.LOGGER.debug("Voice stream detected (magic 0xE4). Installing voice pipeline.");
-            ctx.pipeline().remove(this);
+            in.readByte();
+            E4allClient.LOGGER.info("Voice stream detected (magic 0xE4). Installing voice pipeline.");
 
-            ctx.pipeline().addLast("voiceFrameDecoder",
+            pipeline.addLast("voiceFrameDecoder",
                     new LengthFieldBasedFrameDecoder(65535, 0, 2, 0, 2));
-            ctx.pipeline().addLast("voiceFrameEncoder",
+            pipeline.addLast("voiceFrameEncoder",
                     new LengthFieldPrepender(2));
-            ctx.pipeline().addLast("voiceHandler",
+            pipeline.addLast("voiceHandler",
                     new VoiceStreamHandler(VoiceConnectionManager.INSTANCE));
 
-            if (in.readableBytes() > 0) {
-                out.add(in.retain());
-            }
+            pipeline.remove(this);
         } else {
-            E4allClient.LOGGER.debug("Non-voice stream detected. Passing to Minecraft handler.");
-            in.readerIndex(in.readerIndex() - 1);
-            ctx.pipeline().remove(this);
-            ctx.pipeline().addLast(minecraftHandler);
-            out.add(in.retain());
+            E4allClient.LOGGER.debug("Non-voice stream detected (first byte 0x{}). Passing to Minecraft handler.",
+                    Integer.toHexString(magic & 0xFF));
+
+            pipeline.addLast(minecraftHandler);
+            pipeline.remove(this);
         }
     }
 

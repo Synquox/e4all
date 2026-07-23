@@ -7,6 +7,7 @@ import io.netty.channel.*;
 import link.e4all.DialtoneConnectionExtensions;
 import link.e4all.E4allClient;
 import link.e4all.SmugglersInetSocketAddress;
+import link.e4all.voice.RelayClientVoicechatSocket;
 import link.e4all.dialtone.DialtoneAddress;
 import link.e4all.dialtone.DialtoneAmbientSession;
 import link.e4all.dialtone.DialtoneChannel;
@@ -44,6 +45,9 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfoReturnable<ChannelFuture> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
+            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
+        } else {
+            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
         }
     }
 
@@ -51,6 +55,9 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfoReturnable<ChannelFuture> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
+            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
+        } else {
+            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
         }
     }
 
@@ -58,6 +65,9 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
+            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
+        } else {
+            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
         }
     }
 
@@ -65,6 +75,9 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
+            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
+        } else {
+            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
         }
     }
 
@@ -72,6 +85,9 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStartAlt(InetSocketAddress inetSocketAddress, boolean bl, CallbackInfoReturnable<Connection> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
+            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
+        } else {
+            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
         }
     }
 
@@ -104,8 +120,6 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    // MC 26.1.2+ changed Connection.connect() to call Bootstrap.connect(SocketAddress)
-    // instead of Bootstrap.connect(InetAddress, int). This overload handles that signature.
     @WrapOperation(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;connect(Ljava/net/SocketAddress;)Lio/netty/channel/ChannelFuture;"), require = 0)
     private static ChannelFuture hijackConnectSocketAddress(Bootstrap instance, SocketAddress remoteAddress, Operation<ChannelFuture> operation) {
         if (e4mc$smuggledDialtoneAddress.get() != null) {
@@ -117,8 +131,6 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    // Safety net: ensure the static variable is always cleaned up at the end of the connect
-    // method, even if the @WrapOperation hooks didn't fire (e.g., on an unknown MC version).
     @Inject(method = "/^(connect|method_52271|m_290025_|connectToServer|method_10753|m_178300_)$/", at = @At("RETURN"), require = 0)
     private static void e4all$cleanupSmuggledAddress(CallbackInfoReturnable<?> cir) {
         e4mc$smuggledDialtoneAddress.remove();
@@ -136,10 +148,6 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         }
     }
 
-    // Skip compression for DialtoneChannel — the QUIC/iroh transport handles
-    // data efficiently already; applying Minecraft's zlib on top causes
-    // "incorrect header check" DecoderExceptions due to compression state
-    // mismatches during the async QUIC handshake.
     @Inject(method = "setupCompression", at = @At("HEAD"), cancellable = true, require = 0)
     private void killDoubleCompression(int threshold, boolean validate, CallbackInfo ci) {
         if (channel instanceof DialtoneChannel) {

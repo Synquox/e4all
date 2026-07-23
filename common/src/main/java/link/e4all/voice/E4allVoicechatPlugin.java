@@ -22,6 +22,7 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
     public void registerEvents(EventRegistration registration) {
         registration.registerEvent(VoicechatServerStartingEvent.class, this::onServerStart);
         registration.registerEvent(ClientVoicechatInitializationEvent.class, this::onClientInit);
+        E4allClient.LOGGER.info("e4all voice events registered (server + client).");
     }
 
     private void onServerStart(VoicechatServerStartingEvent event) {
@@ -31,17 +32,12 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
     }
 
     private void onClientInit(ClientVoicechatInitializationEvent event) {
-        if (!RelayClientVoicechatSocket.isConnectedViaRelay()) {
-            E4allClient.LOGGER.debug("Not connected via e4all relay. Using default SVC socket.");
-            return;
-        }
-
         try {
-            E4allClient.LOGGER.info("Connected via relay. Installing RelayClientVoicechatSocket.");
+            E4allClient.LOGGER.info("ClientVoicechatInitializationEvent fired — installing RelayClientVoicechatSocket.");
             RelayClientVoicechatSocket socket = new RelayClientVoicechatSocket();
             event.setSocketImplementation(socket);
         } catch (Exception e) {
-            E4allClient.LOGGER.error("Failed to inject client voice socket. Falling back to UDP.", e);
+            E4allClient.LOGGER.error("Failed to create RelayClientVoicechatSocket.", e);
         }
     }
 }

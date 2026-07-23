@@ -57,6 +57,8 @@ public class VoiceStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
                 RelayVoicechatSocket socket = manager.getSocket();
                 if (socket != null) {
                     socket.enqueuePacket(data, System.currentTimeMillis(), syntheticAddress);
+                } else {
+                    E4allClient.LOGGER.warn("Voice data received for player {} but RelayVoicechatSocket is null!", playerUuid);
                 }
                 break;
             default:
@@ -66,11 +68,12 @@ public class VoiceStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) {
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         if (playerUuid != null) {
             E4allClient.LOGGER.info("Voice stream closed for player {}", playerUuid);
             manager.removeStream(playerUuid);
         }
+        super.channelInactive(ctx);
     }
 
     @Override

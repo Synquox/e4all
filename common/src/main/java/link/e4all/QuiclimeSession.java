@@ -341,6 +341,7 @@ public class QuiclimeSession {
                                                 Thread.sleep(delay * 1000L);
                                                 State currentState = state;
                                                 if (currentState == State.RECONNECTING) {
+                                                    link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
                                                     QuiclimeSession.this.cleanupChannels();
                                                     start();
                                                 } else {
