@@ -429,6 +429,32 @@ public class QuiclimeSession {
                                                 LOGGER.warn("e4all: Offline mode enabled — Microsoft authentication is disabled for this session.");
                                                 Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
                                             }
+
+                                            // Discord community advertisement
+                                            if (!Config.INSTANCE.hideDiscordAd.value()) {
+                                                Mirror.addMessage(Mirror.literal(""));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("Join the e4all Community!"), it -> it.withColor(ChatFormatting.GOLD).withBold(true)));
+                                                Mirror.addMessage(Mirror.literal(""));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("Need help, have questions, or just want to chat?"), it -> it.withColor(ChatFormatting.YELLOW)));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("Looking for teammates or want to stay up to date"), it -> it.withColor(ChatFormatting.YELLOW)));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("with the latest mod updates and announcements?"), it -> it.withColor(ChatFormatting.YELLOW)));
+                                                Mirror.addMessage(Mirror.literal(""));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("Join our Discord server:"), it -> it.withColor(ChatFormatting.WHITE)));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("\uD83D\uDD17 https://discord.gg/pQaqGKS7dZ"), it ->
+                                                        it
+                                                                .withClickEvent(Mirror.openUrl("https://discord.gg/pQaqGKS7dZ"))
+                                                                .withColor(ChatFormatting.AQUA)
+                                                                .withUnderlined(true)
+                                                                .withHoverEvent(Mirror.showText(Mirror.literal("Click to open Discord invite")))
+                                                ));
+                                                Mirror.addMessage(Mirror.withStyle(Mirror.literal("[Don't show again]"), it ->
+                                                        it
+                                                                .withClickEvent(Mirror.runCommand("/e4all hidediscord"))
+                                                                .withColor(ChatFormatting.DARK_GRAY)
+                                                                .withHoverEvent(Mirror.showText(Mirror.literal("Click to hide this message permanently")))
+                                                ));
+                                                Mirror.addMessage(Mirror.literal(""));
+                                            }
                                         }
                                     }
                                     if (msg instanceof ControlMessageCodec.RequestMessageBroadcastMessageClientbound) {

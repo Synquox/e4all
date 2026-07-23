@@ -72,6 +72,11 @@ public class Mirror {
             "net.minecraft.network.chat.ClickEvent$CopyToClipboard",
             "net.minecraft.class_2558$class_10606"
     };
+    private static final String[] OPENURL_CLASS_NAMES = {
+            "net.minecraft.text.ClickEvent$OpenUrl", // yarn
+            "net.minecraft.network.chat.ClickEvent$OpenUrl",
+            "net.minecraft.class_2558$class_10608"
+    };
     private static final String[] SHOWTEXT_CLASS_NAMES = {
             "net.minecraft.text.HoverEvent$ShowText", // yarn
             "net.minecraft.network.chat.HoverEvent$ShowText",
@@ -124,6 +129,28 @@ public class Mirror {
             }
         } else {
             return new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, text);
+        }
+        throw new RuntimeException("Could not locate any way to make a ClickEvent!");
+    }
+
+    public static ClickEvent openUrl(String url) {
+        if (ClickEvent.class.isInterface()) {
+            for (String className : OPENURL_CLASS_NAMES) {
+                try {
+                    Class<?> clazz = Class.forName(className);
+                    // Try URI constructor first (1.21.5+)
+                    try {
+                        Constructor<?> constructor = clazz.getConstructor(java.net.URI.class);
+                        return (ClickEvent) constructor.newInstance(java.net.URI.create(url));
+                    } catch (NoSuchMethodException ignored) {}
+                    // Fall back to String constructor
+                    Constructor<?> constructor = clazz.getConstructor(String.class);
+                    return (ClickEvent) constructor.newInstance(url);
+                } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException |
+                         InvocationTargetException | ClassCastException ignored) {}
+            }
+        } else {
+            return new ClickEvent(ClickEvent.Action.OPEN_URL, url);
         }
         throw new RuntimeException("Could not locate any way to make a ClickEvent!");
     }

@@ -103,6 +103,13 @@ public class E4allClient {
                                     it.withColor(net.minecraft.ChatFormatting.GRAY)));
                             return 1;
                         }))
+                        .then(Commands.literal("hidediscord").executes(ctx -> {
+                            Config.INSTANCE.hideDiscordAd.setValue(true, true);
+                            Mirror.sendSuccessToSource(ctx.getSource(),
+                                Mirror.withStyle(Mirror.literal("Discord community message hidden. You won't see it again."), it ->
+                                    it.withColor(net.minecraft.ChatFormatting.GREEN)));
+                            return 1;
+                        }))
         );
         // Register /e4mc as alias for backwards compatibility
         dispatcher.register(
