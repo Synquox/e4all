@@ -45,15 +45,7 @@ Please contribute
 
 ---
 
-### Compatibility
-e4all is a standalone mod. While it includes the functionality of e4mc, it is recommended to use e4all by itself because I haven't tested it together with e4mc and it really doesn't help to have both installed.
-
-### e4mc Voice Chat Addon
-If you are using the original e4mc and want Voice Chat support without switching to e4all, check out the addon I made for it: [e4mc-vc-addon](https://github.com/Synquox/e4mc-vc-addon).
-
----
-
 ### Credits and Support
-This project is a fork of the original [e4mc](https://modrinth.com/mod/e4mc). I appreciate the work done by the original developers and created this version specifically to provide the community with the Offline Mode feature.
+This project is a fork of the original [e4mc](https://modrinth.com/mod/e4mc). I appreciate the work done by the original developers and created this version specifically to provide the community with the Offline Mode feature and am working on adding even more features.
 
 * Support & Suggestions: If you have problems or want to suggest new features, join the Discord: [https://discord.gg/mUYW9Rw2ae](https://discord.gg/mUYW9Rw2ae) or write a issue on Github
