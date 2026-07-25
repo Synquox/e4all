@@ -37,7 +37,4 @@ public class Config extends ReflectiveConfig {
     @Comment("Whether to hide the domain in the chat message (click to copy still works)")
     public final TrackedValue<Boolean> hideDomainInChat = this.value(false);
 
-    @Comment("Whether to hide the Discord community message when opening a LAN world")
-    public final TrackedValue<Boolean> hideDiscordAd = this.value(false);
-
 }

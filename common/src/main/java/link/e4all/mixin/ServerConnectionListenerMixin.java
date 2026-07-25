@@ -5,6 +5,7 @@ import io.netty.channel.EventLoopGroup;
 import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.QuiclimeSession;
+import link.e4all.XaeroWorldIdentity;
 import net.minecraft.server.network.ServerConnectionListener;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -67,6 +68,7 @@ public abstract class ServerConnectionListenerMixin {
                         return;
                     }
                 }
+                XaeroWorldIdentity.initializeForRelay(((ServerConnectionListener) (Object) this).getServer());
                 E4allClient.session = new QuiclimeSession(e4mc$childHandler, e4mc$group);
                 e4mc$childHandler = null;
                 e4mc$group = null;

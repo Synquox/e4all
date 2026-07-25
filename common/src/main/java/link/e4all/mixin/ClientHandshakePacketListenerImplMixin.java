@@ -12,6 +12,8 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +37,11 @@ public class ClientHandshakePacketListenerImplMixin {
             return ((DialtoneConnectionExtensions) connection).e4mc$exportKeyingMaterial("EXPERIMENTAL mojang authentication".getBytes(StandardCharsets.UTF_8), new byte[0], 20);
         }
         return Crypt.digestData(string, publicKey, secretKey);
+    }
+
+    @Inject(method = "handleGameProfile", at = @At("TAIL"), require = 0)
+    private void e4all$announceOpSessionClient(CallbackInfo ci) {
+        link.e4all.OpSessionClient.announce(connection);
     }
 }
 

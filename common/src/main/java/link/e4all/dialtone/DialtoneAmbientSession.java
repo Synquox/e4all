@@ -18,6 +18,14 @@ public class DialtoneAmbientSession {
 
     private DialtoneAmbientSession() {}
 
+    public Endpoint getEndpoint() {
+        return endpoint;
+    }
+
+    public boolean isStarted() {
+        return endpoint != null;
+    }
+
     public synchronized void start() throws Exception {
         if (endpoint != null || dispatcher != null) {
             E4allClient.LOGGER.info("Cleaning up stale DialtoneAmbientSession before restart");

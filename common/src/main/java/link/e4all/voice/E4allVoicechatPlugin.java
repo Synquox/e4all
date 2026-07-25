@@ -32,12 +32,16 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
     }
 
     private void onClientInit(ClientVoicechatInitializationEvent event) {
+        if (!RelayClientVoicechatSocket.shouldUseCustomSocket()) {
+            E4allClient.LOGGER.debug("Not connecting to an e4all host. Using default SVC socket.");
+            return;
+        }
         try {
             E4allClient.LOGGER.info("ClientVoicechatInitializationEvent fired — installing RelayClientVoicechatSocket.");
             RelayClientVoicechatSocket socket = new RelayClientVoicechatSocket();
             event.setSocketImplementation(socket);
         } catch (Exception e) {
-            E4allClient.LOGGER.error("Failed to create RelayClientVoicechatSocket.", e);
+            E4allClient.LOGGER.error("Failed to inject client voice socket. Falling back to UDP.", e);
         }
     }
 }

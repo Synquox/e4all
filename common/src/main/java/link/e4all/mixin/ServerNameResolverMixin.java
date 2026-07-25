@@ -4,6 +4,7 @@ import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.SmugglersInetSocketAddress;
 import link.e4all.TicketSmuggler;
+import link.e4all.voice.RelayClientVoicechatSocket;
 import net.minecraft.client.multiplayer.resolver.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -72,7 +73,9 @@ public class ServerNameResolverMixin {
                                     var response = E4ALL_HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
                                     E4allClient.LOGGER.info("resp: {}", response);
                                     if (response.statusCode() == 200 && response.body().startsWith("v1_")) {
-                                        ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(response.body().substring(3));
+                                        String ticket = response.body().substring(3);
+                                        ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(ticket);
+                                        RelayClientVoicechatSocket.setPendingDialtoneTicket(ticket);
                                         return Optional.of(serverAddress);
                                     }
                                 }

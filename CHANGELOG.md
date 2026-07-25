@@ -1,5 +1,20 @@
 # Changelog
- 
+
+### 2.0.0-beta
+
+* New Feature
+ * Host Permission Management (WIP):
+   * When cheats are enabled, only the host receives OP status by default.
+   * Hosts can manage other players using standard /op and /deop commands.
+   * Offline/Cracked Mode Verification: OPs are assigned a secret key to authenticate upon rejoining and prevent impersonation.
+   * If a key is lost, the host can choose to:
+     1.*Kick the player
+     2.*Keep OP rights
+     3. **Revoke OP rights
+*  Fixes
+ * SVC (Simple Voice Chat): Ongoing bug fixes (WIP).
+ * Xaero's Mods: Fixed compatibility issues with Xaero's Minimap and WorldMap (WIP).
+
 ### 2.0.0-alpha
 * Voice chat integration
 

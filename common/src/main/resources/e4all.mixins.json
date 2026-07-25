@@ -12,6 +12,7 @@
     "PardonCommandMixin",
     "ServerboundKeyPacketMixin",
     "ServerConnectionListenerMixin",
+    "ServerCommonPacketListenerImplMixin",
     "ServerLoginPacketListenerImplMixin",
     "WhitelistCommandMixin",
     "ncr.MixinConnection",
@@ -25,7 +26,9 @@
     "defaultRequire": 1
   },
   "client": [
+    "ClientCommonPacketListenerImplMixin",
     "ClientHandshakePacketListenerImplMixin",
+    "IntegratedServerMixin",
     "ServerAddressMixin",
     "ServerNameResolverMixin",
     "ShareToLanScreenMixin"

@@ -2,17 +2,20 @@ package link.e4all.voice;
 
 import de.maxhenkel.voicechat.api.ClientVoicechatSocket;
 import de.maxhenkel.voicechat.api.RawUdpPacket;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import link.e4all.E4allClient;
+import link.e4all.dialtone.DialtoneAddress;
+import link.e4all.dialtone.DialtoneAmbientSession;
+import link.e4all.dialtone.DialtoneChannel;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ServerData;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -20,80 +23,88 @@ import java.util.concurrent.LinkedBlockingQueue;
 public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     private static final RawUdpPacket POISON_PILL = new RawUdpPacketImpl(new byte[0], 0, new InetSocketAddress(0));
     private static final long KEEPALIVE_INTERVAL_MS = 15_000;
-    private final LinkedBlockingQueue<RawUdpPacket> queue = new LinkedBlockingQueue<>();
 
-    private Socket tcpSocket;
-    private DataInputStream in;
-    private DataOutputStream out;
-    private Thread readerThread;
-    private Thread keepaliveThread;
+    private final LinkedBlockingQueue<RawUdpPacket> queue = new LinkedBlockingQueue<>();
 
     private DatagramSocket udpSocket;
     private Thread udpReaderThread;
 
+    private DialtoneChannel dialtoneChannel;
+    private Thread keepaliveThread;
+
     private volatile boolean closed = false;
-    private volatile boolean useRelay = false;
+    private volatile boolean useDialtone = false;
 
-    private static volatile boolean connectedViaDialtone = false;
+    private static volatile String pendingDialtoneTicket = null;
 
-    public static void setConnectedViaDialtone(boolean value) {
-        connectedViaDialtone = value;
-        if (value) {
-            E4allClient.LOGGER.info("e4all voice: Dialtone connection detected — will use relay voice socket.");
-        }
+    public static void setPendingDialtoneTicket(String ticket) {
+        pendingDialtoneTicket = ticket;
+    }
+
+    public static boolean shouldUseCustomSocket() {
+        if (pendingDialtoneTicket != null) return true;
+        return false;
     }
 
     @Override
     public void open() throws Exception {
-        if (isConnectedViaRelay()) {
-            useRelay = true;
-            openRelay();
+        String ticket = pendingDialtoneTicket;
+        pendingDialtoneTicket = null;
+        if (ticket != null) {
+            useDialtone = true;
+            openDialtone(ticket);
         } else {
-            useRelay = false;
+            useDialtone = false;
             openDefaultUdp();
         }
     }
 
-    private void openRelay() throws Exception {
-        String[] hostPort = getRelayAddress();
-        String host = hostPort[0];
-        int port = Integer.parseInt(hostPort[1]);
+    private void openDialtone(String ticket) throws Exception {
+        E4allClient.LOGGER.info("e4all voice: Opening Dialtone voice connection");
 
-        E4allClient.LOGGER.info("e4all voice: Opening relay voice connection to {}:{}", host, port);
+        if (!DialtoneAmbientSession.INSTANCE.isStarted()) {
+            DialtoneAmbientSession.INSTANCE.start();
+        }
 
-        tcpSocket = new Socket();
-        tcpSocket.setTcpNoDelay(true);
-        tcpSocket.setKeepAlive(true);
-        tcpSocket.connect(new InetSocketAddress(host, port), 5000);
+        Bootstrap bs = new Bootstrap()
+                .group(DialtoneAmbientSession.INSTANCE.group)
+                .channel(DialtoneChannel.class);
 
-        in = new DataInputStream(tcpSocket.getInputStream());
-        out = new DataOutputStream(tcpSocket.getOutputStream());
+        dialtoneChannel = (DialtoneChannel) bs.connect(new DialtoneAddress(ticket)).syncUninterruptibly().channel();
 
-        out.writeByte(VoiceFraming.VOICE_MAGIC);
+        dialtoneChannel.pipeline().addLast("voiceFrameDecoder",
+                new LengthFieldBasedFrameDecoder(65535, 0, 2, 0, 2));
+        dialtoneChannel.pipeline().addLast("voiceClientHandler",
+                new ClientVoiceReadHandler(queue));
+
+        ByteBuf magic = Unpooled.buffer(1);
+        magic.writeByte(VoiceFraming.VOICE_MAGIC);
+        dialtoneChannel.writeAndFlush(magic).syncUninterruptibly();
+
+        dialtoneChannel.pipeline().addLast("voiceFrameEncoder",
+                new LengthFieldPrepender(2));
 
         UUID playerUuid = Minecraft.getInstance().getUser().getProfileId();
         if (playerUuid == null) {
             playerUuid = UUID.nameUUIDFromBytes(
                     ("OfflinePlayer:" + Minecraft.getInstance().getUser().getName()).getBytes());
         }
-        byte[] handshake = VoiceFraming.createHandshake(playerUuid);
-        out.writeShort(handshake.length);
-        out.write(handshake);
-        out.flush();
 
-        readerThread = new Thread(this::relayReadLoop, "e4all-vc-client-reader");
-        readerThread.setDaemon(true);
-        readerThread.start();
+        ByteBuf handshake = Unpooled.buffer(1 + 16);
+        handshake.writeByte(VoiceFraming.MSG_HANDSHAKE);
+        handshake.writeLong(playerUuid.getMostSignificantBits());
+        handshake.writeLong(playerUuid.getLeastSignificantBits());
+        dialtoneChannel.writeAndFlush(handshake).syncUninterruptibly();
 
         keepaliveThread = new Thread(this::keepaliveLoop, "e4all-vc-client-keepalive");
         keepaliveThread.setDaemon(true);
         keepaliveThread.start();
 
-        E4allClient.LOGGER.info("e4all voice: Relay voice connected to {}:{} for player {}", host, port, playerUuid);
+        E4allClient.LOGGER.info("e4all voice: Dialtone voice connected for player {}", playerUuid);
     }
 
     private void openDefaultUdp() throws Exception {
-        E4allClient.LOGGER.info("e4all voice: Not connected via relay — using default UDP voice socket.");
+        E4allClient.LOGGER.info("e4all voice: No Dialtone ticket — using default UDP voice socket.");
         udpSocket = new DatagramSocket();
         udpSocket.setSoTimeout(0);
 
@@ -102,46 +113,18 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
         udpReaderThread.start();
     }
 
-    private void relayReadLoop() {
-        try {
-            while (!closed) {
-                int length = in.readUnsignedShort();
-                if (length < 1) continue;
-                byte type = in.readByte();
-                byte[] payload = new byte[length - 1];
-                if (payload.length > 0) in.readFully(payload);
-
-                if (type == VoiceFraming.MSG_VOICE_DATA) {
-                    queue.offer(new RawUdpPacketImpl(payload, System.currentTimeMillis(),
-                            new InetSocketAddress("127.0.0.1", 0)));
-                } else if (type == VoiceFraming.MSG_CLOSE) {
-                    break;
-                }
-            }
-        } catch (IOException e) {
-            if (!closed) {
-                E4allClient.LOGGER.debug("Voice relay connection lost", e);
-            }
-        } finally {
-            closed = true;
-            queue.offer(POISON_PILL);
-        }
-    }
-
     private void keepaliveLoop() {
         while (!closed) {
             try {
                 Thread.sleep(KEEPALIVE_INTERVAL_MS);
-                if (!closed && out != null) {
-                    synchronized (out) {
-                        out.writeShort(1);
-                        out.writeByte(VoiceFraming.MSG_KEEPALIVE);
-                        out.flush();
-                    }
+                if (!closed && dialtoneChannel != null && dialtoneChannel.isActive()) {
+                    ByteBuf buf = Unpooled.buffer(1);
+                    buf.writeByte(VoiceFraming.MSG_KEEPALIVE);
+                    dialtoneChannel.writeAndFlush(buf);
                 }
             } catch (InterruptedException e) {
                 break;
-            } catch (IOException e) {
+            } catch (Throwable e) {
                 if (!closed) {
                     E4allClient.LOGGER.debug("Keepalive write failed", e);
                 }
@@ -159,7 +142,7 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
                 byte[] data = new byte[packet.getLength()];
                 System.arraycopy(packet.getData(), packet.getOffset(), data, 0, packet.getLength());
                 queue.offer(new RawUdpPacketImpl(data, System.currentTimeMillis(), packet.getSocketAddress()));
-            } catch (IOException e) {
+            } catch (java.io.IOException e) {
                 if (!closed) {
                     E4allClient.LOGGER.debug("UDP read error (may be normal during shutdown)", e);
                 }
@@ -170,31 +153,29 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     @Override
     public RawUdpPacket read() throws Exception {
         RawUdpPacket packet = queue.take();
-        if (packet == POISON_PILL || closed) throw new IOException("Voice relay socket closed");
+        if (packet == POISON_PILL || closed) throw new java.io.IOException("Voice socket closed");
         return packet;
     }
 
     @Override
     public void send(byte[] data, SocketAddress address) throws Exception {
         if (closed) return;
-        if (useRelay) {
-            sendRelay(data);
+        if (useDialtone) {
+            sendDialtone(data);
         } else {
             sendUdp(data, address);
         }
     }
 
-    private void sendRelay(byte[] data) throws IOException {
-        if (out == null || closed) return;
-        synchronized (out) {
-            out.writeShort(1 + data.length);
-            out.writeByte(VoiceFraming.MSG_VOICE_DATA);
-            out.write(data);
-            out.flush();
-        }
+    private void sendDialtone(byte[] data) {
+        if (dialtoneChannel == null || !dialtoneChannel.isActive()) return;
+        ByteBuf buf = dialtoneChannel.alloc().buffer(1 + data.length);
+        buf.writeByte(VoiceFraming.MSG_VOICE_DATA);
+        buf.writeBytes(data);
+        dialtoneChannel.writeAndFlush(buf);
     }
 
-    private void sendUdp(byte[] data, SocketAddress address) throws IOException {
+    private void sendUdp(byte[] data, SocketAddress address) throws java.io.IOException {
         if (udpSocket == null || udpSocket.isClosed()) return;
         DatagramPacket packet = new DatagramPacket(data, data.length, address);
         udpSocket.send(packet);
@@ -203,69 +184,29 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     @Override
     public void close() {
         if (closed) return;
-
-        try {
-            if (out != null) {
-                synchronized (out) {
-                    out.writeShort(1);
-                    out.writeByte(VoiceFraming.MSG_CLOSE);
-                    out.flush();
-                }
-            }
-        } catch (IOException ignored) {}
-
         closed = true;
-        connectedViaDialtone = false;
         queue.offer(POISON_PILL);
 
-        try { if (tcpSocket != null) tcpSocket.close(); } catch (IOException ignored) {}
-        if (readerThread != null) readerThread.interrupt();
+        if (dialtoneChannel != null && dialtoneChannel.isActive()) {
+            try {
+                ByteBuf buf = dialtoneChannel.alloc().buffer(1);
+                buf.writeByte(VoiceFraming.MSG_CLOSE);
+                dialtoneChannel.writeAndFlush(buf);
+            } catch (Throwable ignored) {}
+        }
+        if (dialtoneChannel != null) {
+            try { dialtoneChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
+        }
         if (keepaliveThread != null) keepaliveThread.interrupt();
 
         if (udpSocket != null && !udpSocket.isClosed()) {
             udpSocket.close();
         }
         if (udpReaderThread != null) udpReaderThread.interrupt();
+
+        pendingDialtoneTicket = null;
     }
 
     @Override
     public boolean isClosed() { return closed; }
-
-    private String[] getRelayAddress() {
-        ServerData server = Minecraft.getInstance().getCurrentServer();
-        if (server != null && server.ip != null && !server.ip.isEmpty()) {
-            String addr = server.ip;
-            if (addr.contains(":")) {
-                String[] parts = addr.split(":", 2);
-                return new String[]{parts[0], parts[1]};
-            }
-            return new String[]{addr, "25565"};
-        }
-        throw new IllegalStateException("Cannot determine server address for voice relay");
-    }
-
-    public static boolean isConnectedViaRelay() {
-        if (connectedViaDialtone) {
-            E4allClient.LOGGER.debug("e4all voice: Relay detected via Dialtone flag.");
-            return true;
-        }
-
-        ServerData server = Minecraft.getInstance().getCurrentServer();
-        if (server == null || server.ip == null) {
-            E4allClient.LOGGER.debug("e4all voice: getCurrentServer() returned null — not on a relay.");
-            return false;
-        }
-
-        String addr = server.ip.toLowerCase();
-        boolean isRelay = addr.contains(".e4mc.link")
-                       || addr.contains(".e4mc.")
-                       || addr.contains(".e4all.");
-
-        if (isRelay) {
-            E4allClient.LOGGER.debug("e4all voice: Relay detected via domain match: {}", server.ip);
-        } else {
-            E4allClient.LOGGER.debug("e4all voice: Domain '{}' does not match relay patterns.", server.ip);
-        }
-        return isRelay;
-    }
 }

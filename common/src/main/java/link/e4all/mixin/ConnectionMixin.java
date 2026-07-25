@@ -45,9 +45,8 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfoReturnable<ChannelFuture> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
-            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
         } else {
-            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
+            RelayClientVoicechatSocket.setPendingDialtoneTicket(null);
         }
     }
 
@@ -55,9 +54,8 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfoReturnable<ChannelFuture> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
-            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
         } else {
-            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
+            RelayClientVoicechatSocket.setPendingDialtoneTicket(null);
         }
     }
 
@@ -65,9 +63,8 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
-            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
         } else {
-            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
+            RelayClientVoicechatSocket.setPendingDialtoneTicket(null);
         }
     }
 
@@ -75,9 +72,8 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStart(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
-            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
         } else {
-            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
+            RelayClientVoicechatSocket.setPendingDialtoneTicket(null);
         }
     }
 
@@ -85,9 +81,8 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static void hijackStartAlt(InetSocketAddress inetSocketAddress, boolean bl, CallbackInfoReturnable<Connection> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
-            RelayClientVoicechatSocket.setConnectedViaDialtone(true);
         } else {
-            RelayClientVoicechatSocket.setConnectedViaDialtone(false);
+            RelayClientVoicechatSocket.setPendingDialtoneTicket(null);
         }
     }
 
