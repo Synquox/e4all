@@ -6,5 +6,15 @@
     "text.e4all_minecraft.error": "Sebuah ralat telah berlaku dalam e4all",
     "text.e4all_minecraft.doctor.start": "Sedang menjana maklumat penyelesaian masalah. Sila tunggu.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all telah dimuat turun daripada sumber yang tidak diketahui. Salinan e4all ini mungkin ketinggalan zaman atau diubah suai.",
-    "text.e4all_minecraft.hiddenDomain": "disembunyikan, klik untuk salin"
+    "text.e4all_minecraft.hiddenDomain": "disembunyikan, klik untuk salin",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Mod offline didayakan — klien tidak rasmi (cracked) kini boleh menyertai",
+    "text.e4all_minecraft.offlineModeDisabled": "Mod offline dilumpuhkan — pengesahan Microsoft diperlukan",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ AMARAN: Mod Offline didayakan! Pengesahan dilumpuhkan, jadi sesiapa sahaja dengan sebarang nama pengguna boleh menyertai. Ini tidak boleh dibatalkan untuk sesi ini.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Sambungan geganti terputus, cuba menyambung semula..."
 }

@@ -5,5 +5,16 @@
     "text.e4all_minecraft.clickToStop": " (Klikněte sem pro zastavení)",
     "text.e4all_minecraft.error": "V modu e4all došlo k chybě",
     "text.e4all_minecraft.doctor.start": "Generování informací pro řešení problémů. Čekejte prosím.",
-    "text.e4all_minecraft.poisonpill.badurl": "Mod e4all byl stažen z neznámého zdroje. Tato kopie modu e4all může být zastaralá nebo upravená."
+    "text.e4all_minecraft.poisonpill.badurl": "Mod e4all byl stažen z neznámého zdroje. Tato kopie modu e4all může být zastaralá nebo upravená.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Offline režim povolen — nyní se mohou připojit i neoficiální (cracked) klienti",
+    "text.e4all_minecraft.offlineModeDisabled": "Offline režim zakázán — je vyžadováno ověření Microsoft",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ VAROVÁNÍ: Offline režim je povolen! Ověřování je vypnuto, takže se může připojit kdokoli s jakýmkoli uživatelským jménem. Toto nastavení nelze pro tuto relaci vzít zpět.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Připojení k relé bylo ztraceno, pokus o znovupřipojení...",
+    "text.e4all_minecraft.hiddenDomain": "skryté, klikněte pro zkopírování"
 }

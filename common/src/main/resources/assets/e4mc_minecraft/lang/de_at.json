@@ -5,5 +5,16 @@
     "text.e4all_minecraft.clickToStop": "(Zum Beenden hier klicken)",
     "text.e4all_minecraft.error": "Ein Fehler ist in e4all aufgetreten",
     "text.e4all_minecraft.doctor.start": "Diagnosedaten werden gesammelt. Bitte warte einen Moment.",
-    "text.e4all_minecraft.poisonpill.badurl": "e4all wurde aus einer unbekannten Quelle heruntergeladen. Diese Version könnte veraltet oder verändert worden sein."
+    "text.e4all_minecraft.poisonpill.badurl": "e4all wurde aus einer unbekannten Quelle heruntergeladen. Diese Version könnte veraltet oder verändert worden sein.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Offline-Modus wurde aktiviert — gecrackte Clients können jetzt beitreten",
+    "text.e4all_minecraft.offlineModeDisabled": "Offline-Modus deaktiviert — Microsoft-Authentifizierung erforderlich",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ WARNUNG: Offline-Modus ist aktiviert! Die Authentifizierung ist deaktiviert, sodass jeder mit jedem Benutzernamen beitreten kann. Dies kann für diese Sitzung nicht rückgängig gemacht werden.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Relay-Verbindung verloren, versuche erneut zu verbinden...",
+    "text.e4all_minecraft.hiddenDomain": "verborgen, zum Kopieren klicken"
 }

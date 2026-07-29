@@ -14,8 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ServerCommonPacketListenerImplMixin {
     @Shadow public abstract GameProfile getOwner();
 
-    @Inject(method = "handleCustomPayload", at = @At("HEAD"))
+    @Inject(method = "handleCustomPayload", at = @At("HEAD"), require = 0)
     private void e4all$handleOpSessionPayload(ServerboundCustomPayloadPacket packet, CallbackInfo ci) {
-        OpSessionManager.handleClientPayload(getOwner(), packet.payload().id());
+        net.minecraft.resources.ResourceLocation id = link.e4all.PacketHelper.extractPayloadId(packet.payload());
+        if (id != null) OpSessionManager.handleClientPayload(getOwner(), id);
     }
 }

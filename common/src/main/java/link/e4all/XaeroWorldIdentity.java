@@ -2,9 +2,6 @@ package link.e4all;
 
 import link.e4all.dialtone.DialtoneAddress;
 import net.minecraft.network.Connection;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,8 +19,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class XaeroWorldIdentity {
     private static final String ID_FILE_NAME = "e4all-xaero-world-id.txt";
-    private static final ResourceLocation XAERO_MINIMAP = new ResourceLocation("xaerominimap", "main");
-    private static final ResourceLocation XAERO_WORLDMAP = new ResourceLocation("xaeroworldmap", "main");
+    private static final ResourceLocation XAERO_MINIMAP = OpSessionPayload.resourceLocation("xaerominimap", "main");
+    private static final ResourceLocation XAERO_WORLDMAP = OpSessionPayload.resourceLocation("xaeroworldmap", "main");
     private static final ConcurrentHashMap<Path, Integer> WORLD_IDS = new ConcurrentHashMap<>();
     private static final Logger LOGGER = LoggerFactory.getLogger("e4all");
 
@@ -44,8 +41,19 @@ public final class XaeroWorldIdentity {
         }
 
         int worldId = getOrCreateWorldId(server);
-        player.connection.send(new ClientboundCustomPayloadPacket(new LevelMapPropertiesPayload(XAERO_MINIMAP, worldId)));
-        player.connection.send(new ClientboundCustomPayloadPacket(new LevelMapPropertiesPayload(XAERO_WORLDMAP, worldId)));
+        byte[] data = makeXaeroData(worldId);
+        PacketHelper.sendClientbound(player, XAERO_MINIMAP, data);
+        PacketHelper.sendClientbound(player, XAERO_WORLDMAP, data);
+    }
+
+    private static byte[] makeXaeroData(int worldId) {
+        byte[] data = new byte[5];
+        data[0] = 0; // writeByte(0)
+        data[1] = (byte) (worldId >> 24);
+        data[2] = (byte) (worldId >> 16);
+        data[3] = (byte) (worldId >> 8);
+        data[4] = (byte) worldId;
+        return data;
     }
 
     private static int getOrCreateWorldId(MinecraftServer server) {
@@ -90,13 +98,5 @@ public final class XaeroWorldIdentity {
             id = ThreadLocalRandom.current().nextInt();
         } while (id == 0);
         return id;
-    }
-
-    private record LevelMapPropertiesPayload(ResourceLocation id, int worldId) implements CustomPacketPayload {
-        @Override
-        public void write(FriendlyByteBuf buffer) {
-            buffer.writeByte(0);
-            buffer.writeInt(worldId);
-        }
     }
 }

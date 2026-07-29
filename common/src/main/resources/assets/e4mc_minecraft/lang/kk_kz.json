@@ -1,7 +1,20 @@
-{
-    "text.e4all_minecraft.domainAssigned": "Жергілікті сервер [%s] доменінде орналасқан",
-    "text.e4all_minecraft.closeServer": "Жергілікті сервер енді жалпыға қолжетімді емес",
-    "text.e4all_minecraft.serverAlreadyClosed": "Жергілікті сервер жалпыға қолжетімді емес",
-    "text.e4all_minecraft.clickToStop": " (Тоқтату үшін осы жерді басыңыз)",
-    "text.e4all_minecraft.error": "e4all ішінде қате пайда болды"
+{
+    "text.e4all_minecraft.domainAssigned": "Жергілікті сервер [%s] доменінде орналасқан",
+    "text.e4all_minecraft.closeServer": "Жергілікті сервер енді жалпыға қолжетімді емес",
+    "text.e4all_minecraft.serverAlreadyClosed": "Жергілікті сервер жалпыға қолжетімді емес",
+    "text.e4all_minecraft.clickToStop": " (Тоқтату үшін осы жерді басыңыз)",
+    "text.e4all_minecraft.error": "e4all ішінде қате пайда болды",
+    "text.e4all_minecraft.doctor.start": "Диагностикалық деректерді жинау. Күте тұрыңыз.",
+    "text.e4all_minecraft.poisonpill.badurl": "e4all белгісіз көзден жүктелген. Бұл көшірме ескірген немесе өзгертілген болуы мүмкін.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн режимі қосылды — пираттық клиенттер енді қосыла алады",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн режимі өшірілді — Microsoft аутентификациясы қажет",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ НАЗАР АУДАРЫҢЫЗ: Офлайн режимі қосылған! Аутентификация өшірілген, сондықтан кез келген адам кез келген атпен қосыла алады. Бұл әрекетті осы сессия үшін болдырмау мүмкін емес.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Релемен байланыс үзілді, қайта қосылу әрекеті...",
+    "text.e4all_minecraft.hiddenDomain": "жасырын, көшіру үшін басыңыз"
 }

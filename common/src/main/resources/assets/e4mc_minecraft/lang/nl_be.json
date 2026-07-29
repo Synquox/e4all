@@ -3,5 +3,18 @@
     "text.e4all_minecraft.closeServer": "Lokaal spel wordt niet langer publiek gehost",
     "text.e4all_minecraft.serverAlreadyClosed": "Lokaal wordt spel niet publiek gehost",
     "text.e4all_minecraft.clickToStop": " (Klik hier om te stoppen)",
-    "text.e4all_minecraft.error": "Er is een fout opgetreden in e4all"
+    "text.e4all_minecraft.error": "Er is een fout opgetreden in e4all",
+    "text.e4all_minecraft.doctor.start": "Probleemoplossingsinformatie genereren. Een ogenblik geduld aub.",
+    "text.e4all_minecraft.poisonpill.badurl": "e4all is gedownload van een onbekende bron. Deze kopie van e4all is mogelijk verouderd of aangepast.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Offline modus ingeschakeld — cracked clients kunnen nu meespelen",
+    "text.e4all_minecraft.offlineModeDisabled": "Offline modus uitgeschakeld — Microsoft-authenticatie vereist",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ WAARSCHUWING: Offline modus is ingeschakeld! Authenticatie is uitgeschakeld, dus iedereen kan met elke gebruikersnaam meespelen. Dit kan niet ongedaan worden gemaakt voor deze sessie.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Verbinding met relay verbroken, proberen opnieuw te verbinden...",
+    "text.e4all_minecraft.hiddenDomain": "verborgen, klik om te kopiëren"
 }

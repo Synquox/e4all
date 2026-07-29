@@ -1,9 +1,20 @@
 {
-  "text.e4all_minecraft.domainAssigned": "Урындағы донъя хәҙер тышҡы адрес аша асыла: [%s]",
-  "text.e4all_minecraft.closeServer": "Урындағы донъя интернет аша инде асылмай",
-  "text.e4all_minecraft.serverAlreadyClosed": "Урындағы донъя интернеттан инде өҙөлгән",
-  "text.e4all_minecraft.clickToStop": " (Өҙөү өсөн баҫығыҙ)",
-  "text.e4all_minecraft.error": "e4all'та хата килеп сыҡты",
-  "text.e4all_minecraft.doctor.start": "Диагностика өсөн мәғлүмәт йыйыла. Зинһар, бер аҙ көтөгөҙ.",
-  "text.e4all_minecraft.poisonpill.badurl": "e4all билдәһеҙ сығанаҡтан күсереп алынған. Был версия иҫкергән йәки үҙгәртелгән булыуы мөмкин."
+    "text.e4all_minecraft.domainAssigned": "Урындағы донъя хәҙер тышҡы адрес аша асыла: [%s]",
+    "text.e4all_minecraft.closeServer": "Урындағы донъя интернет аша инде асылмай",
+    "text.e4all_minecraft.serverAlreadyClosed": "Урындағы донъя интернеттан инде өҙөлгән",
+    "text.e4all_minecraft.clickToStop": " (Өҙөү өсөн баҫығыҙ)",
+    "text.e4all_minecraft.error": "e4all'та хата килеп сыҡты",
+    "text.e4all_minecraft.doctor.start": "Диагностика өсөн мәғлүмәт йыйыла. Зинһар, бер аҙ көтөгөҙ.",
+    "text.e4all_minecraft.poisonpill.badurl": "e4all билдәһеҙ сығанаҡтан күсереп алынған. Был версия иҫкергән йәки үҙгәртелгән булыуы мөмкин.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим ҡабыҙылды — пират клиенттар хәҙер ҡушыла ала",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим һүндерелде — Microsoft аутентификацияһы талап ителә",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ ИҒТИБАР: Офлайн-режим ҡабыҙылған! Аутентификация һүндерелгән, шуға күрә теләгән бер кеше теләсә ниндәй исем менән инә ала. Был ғәмәлде ошо сессия өсөн кире ҡағып булмай.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Бәйләнеш өҙөлдө, ҡабаттан тоташырға маташыу...",
+    "text.e4all_minecraft.hiddenDomain": "йәшерен, күсереп алыу өсөн баҫығыҙ"
 }

@@ -56,7 +56,7 @@ public abstract class PlayerListMixin {
         }
     }
 
-    @Inject(method = "placeNewPlayer", at = @At("HEAD"))
+    @Inject(method = "placeNewPlayer", at = @At("HEAD"), require = 0)
     private void e4all$startOpVerification(Connection connection, ServerPlayer player, CommonListenerCookie cookie, CallbackInfo ci) {
         OpSessionManager.onPlayerConnecting(getServer(), player);
     }
@@ -67,18 +67,19 @@ public abstract class PlayerListMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V",
                     ordinal = 0
-            )
+            ),
+            require = 0
     )
     private void e4all$sendXaeroWorldIdentityBeforeJoin(Connection connection, ServerPlayer player, CommonListenerCookie cookie, CallbackInfo ci) {
         XaeroWorldIdentity.sendToRelayPlayer(getServer(), connection, player);
     }
 
-    @Inject(method = "remove", at = @At("TAIL"))
+    @Inject(method = "remove", at = @At("TAIL"), require = 0)
     private void e4all$finishOpVerification(ServerPlayer player, CallbackInfo ci) {
         OpSessionManager.onPlayerDisconnected(getServer(), player);
     }
 
-    @Inject(method = "isOp", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "isOp", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$hideUnverifiedOp(GameProfile profile, CallbackInfoReturnable<Boolean> cir) {
         Boolean overridden = OpSessionManager.getOpOverride(getServer(), profile);
         if (overridden != null) {
@@ -86,17 +87,17 @@ public abstract class PlayerListMixin {
         }
     }
 
-    @Inject(method = "op", at = @At("TAIL"))
+    @Inject(method = "op", at = @At("TAIL"), require = 0)
     private void e4all$createOpSession(GameProfile profile, CallbackInfo ci) {
         OpSessionManager.onOpGranted(getServer(), profile);
     }
 
-    @Inject(method = "deop", at = @At("TAIL"))
+    @Inject(method = "deop", at = @At("TAIL"), require = 0)
     private void e4all$removeOpSession(GameProfile profile, CallbackInfo ci) {
         OpSessionManager.onDeop(getServer(), profile);
     }
 
-    @Inject(method = "tick", at = @At("TAIL"))
+    @Inject(method = "tick", at = @At("TAIL"), require = 0)
     private void e4all$tickOpVerification(CallbackInfo ci) {
         OpSessionManager.tick(getServer());
     }

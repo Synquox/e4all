@@ -3,5 +3,18 @@
     "text.e4all_minecraft.closeServer": "Tu partida ya no ehtá compartía con náide",
     "text.e4all_minecraft.serverAlreadyClosed": "Tu partida no se tá compartiendo",
     "text.e4all_minecraft.clickToStop": " (Pulsa pa pará)",
-    "text.e4all_minecraft.error": "A ocurrío un erroh con e4all"
+    "text.e4all_minecraft.error": "A ocurrío un erroh con e4all",
+    "text.e4all_minecraft.doctor.start": "Chenerando información de solución de problemas. Por favor, aspera.",
+    "text.e4all_minecraft.poisonpill.badurl": "e4all s'ha descargau d'una fuent desconoixida. Ista copia d'e4all puet estar desactualizada u modificada.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Modo offline activau — os clients no oficials (cracked) agora se i pueden unir",
+    "text.e4all_minecraft.offlineModeDisabled": "Modo offline desactivau — se requier autenticación de Microsoft",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ ALVERTENCIA: ¡O modo offline ye activau! L'autenticación ye desactivada, por lo que qualsiquiera puet unir-se con qualsiquier nombre d'usuario. Isto no se puet desfer ta ista sesión.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Connexión d'o relé perdida, intentando reconectar...",
+    "text.e4all_minecraft.hiddenDomain": "oculto, clic ta copiar"
 }

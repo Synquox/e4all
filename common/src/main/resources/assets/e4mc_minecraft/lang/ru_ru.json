@@ -5,5 +5,16 @@
     "text.e4all_minecraft.clickToStop": " (Нажмите здесь, чтобы остановить)",
     "text.e4all_minecraft.error": "В e4all произошла ошибка",
     "text.e4all_minecraft.doctor.start": "Собираем данные для диагностики. Пожалуйста, подождите.",
-    "text.e4all_minecraft.poisonpill.badurl": "e4all был скачан из неизвестного источника. Эта версия может быть устаревшей или изменённой."
+    "text.e4all_minecraft.poisonpill.badurl": "e4all был скачан из неизвестного источника. Эта версия может быть устаревшей или изменённой.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим включен — пиратские клиенты теперь могут подключаться",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим выключен — требуется аутентификация Microsoft",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ ВНИМАНИЕ: Офлайн-режим включен! Аутентификация отключена, поэтому любой желающий может зайти под любым именем. Это действие нельзя отменить для текущей сессии.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Соединение с ретранслятором потеряно, попытка переподключения...",
+    "text.e4all_minecraft.hiddenDomain": "скрыто, нажмите чтобы скопировать"
 }

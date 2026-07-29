@@ -3,5 +3,18 @@
     "text.e4all_minecraft.closeServer": "Le jeu local n'est plus hébergé publiquement",
     "text.e4all_minecraft.serverAlreadyClosed": "Le jeu local n'est pas hébergé publiquement",
     "text.e4all_minecraft.clickToStop": " (Cliquez ici pour arrêter)",
-    "text.e4all_minecraft.error": "Une erreur s'est produite dans e4all"
+    "text.e4all_minecraft.error": "Une erreur s'est produite dans e4all",
+    "text.e4all_minecraft.doctor.start": "Génération des informations de dépannage. Veuillez patienter.",
+    "text.e4all_minecraft.poisonpill.badurl": "e4all a été téléchargé depuis une source inconnue. Cette copie d'e4all peut être obsolète ou modifiée.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Mode hors ligne activé — les clients non premium peuvent maintenant se connecter",
+    "text.e4all_minecraft.offlineModeDisabled": "Mode hors ligne désactivé — authentification Microsoft requise",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ ATTENTION : Le mode hors ligne est activé ! L'authentification est désactivée, donc n'importe qui peut se connecter avec n'importe quel pseudo. Cela ne peut pas être annulé pour cette session.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all : Connexion au relais perdue, tentative de reconnexion...",
+    "text.e4all_minecraft.hiddenDomain": "masqué, cliquer pour copier"
 }

@@ -2,5 +2,19 @@
     "text.e4all_minecraft.domainAssigned": "将本地游戏托管在域名[%s]上",
     "text.e4all_minecraft.closeServer": "不再公开托管本地游戏",
     "text.e4all_minecraft.serverAlreadyClosed": "本地游戏没有被公开托管",
-    "text.e4all_minecraft.clickToStop": "（点击这里以停止）"
+    "text.e4all_minecraft.clickToStop": "（点击这里以停止）",
+    "text.e4all_minecraft.error": "e4all 中发生错误",
+    "text.e4all_minecraft.doctor.start": "正在生成故障排除信息。请稍候。",
+    "text.e4all_minecraft.poisonpill.badurl": "e4all 是从未知来源下载的。此 e4all 副本可能已过时或被修改。",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "离线模式已启用 — 盗版 (cracked) 客户端现在可以加入",
+    "text.e4all_minecraft.offlineModeDisabled": "离线模式已禁用 — 需要 Microsoft 身份验证",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ 警告：离线模式已启用！身份验证已禁用，任何人都可以使用任何用户名加入。此操作在本次会话中无法撤消。",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: 中继连接丢失，正在尝试重新连接...",
+    "text.e4all_minecraft.hiddenDomain": "已隐藏，点击复制"
 }

@@ -26,7 +26,7 @@ public class MinecraftServerMixin {
         }
     }
 
-    @Inject(method = "stopServer", at = @At("HEAD"))
+    @Inject(method = "stopServer", at = @At("HEAD"), require = 0)
     private void e4all$endOpSession(CallbackInfo ci) {
         OpSessionManager.endSession((MinecraftServer) (Object) this);
     }

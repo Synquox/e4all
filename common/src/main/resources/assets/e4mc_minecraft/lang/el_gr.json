@@ -2,5 +2,19 @@
     "text.e4all_minecraft.domainAssigned": "Τοπικό παιχνίδι εξυπηρετήται στη διεύθηνση [%s]",
     "text.e4all_minecraft.closeServer": "Το τοπικό παιχνίδι δεν εξυπηρετήται δημόσια πλέον",
     "text.e4all_minecraft.serverAlreadyClosed": "Το τοπικό παιχνίδι δεν εξυπηρετήται δημόσια",
-    "text.e4all_minecraft.clickToStop": " (Πατήστε εδώ για απενεργοποίηση)"
+    "text.e4all_minecraft.clickToStop": " (Πατήστε εδώ για απενεργοποίηση)",
+    "text.e4all_minecraft.error": "Παρουσιάστηκε σφάλμα στο e4all",
+    "text.e4all_minecraft.doctor.start": "Δημιουργία πληροφοριών αντιμετώπισης προβλημάτων. Παρακαλώ περιμένετε.",
+    "text.e4all_minecraft.poisonpill.badurl": "Το e4all κατέβηκε από άγνωστη πηγή. Αυτό το αντίγραφο του e4all ίσως είναι παρωχημένο ή τροποποιημένο.",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "Λειτουργία εκτός σύνδεσης ενεργοποιήθηκε — πειρατικά (cracked) clients μπορούν πλέον να συνδεθούν",
+    "text.e4all_minecraft.offlineModeDisabled": "Λειτουργία εκτός σύνδεσης απενεργοποιήθηκε — απαιτείται έλεγχος ταυτότητας Microsoft",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ ΠΡΟΕΙΔΟΠΟΙΗΣΗ: Η λειτουργία εκτός σύνδεσης είναι ενεργοποιημένη! Ο έλεγχος ταυτότητας είναι απενεργοποιημένος, οπότε ο καθένας με οποιοδήποτε όνομα χρήστη μπορεί να συνδεθεί. Αυτό δεν μπορεί να αναιρεθεί για αυτήν τη συνεδρία.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: Η σύνδεση του αναμεταδότη χάθηκε, προσπάθεια επανασύνδεσης...",
+    "text.e4all_minecraft.hiddenDomain": "κρυφό, κάντε κλικ για αντιγραφή"
 }

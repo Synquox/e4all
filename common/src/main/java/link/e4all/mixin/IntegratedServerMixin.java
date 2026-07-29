@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(IntegratedServer.class)
 public abstract class IntegratedServerMixin {
-    @Inject(method = "publishServer", at = @At("TAIL"))
+    @Inject(method = "publishServer", at = @At("TAIL"), require = 0)
     private void e4all$startOpSession(GameType gameType, boolean allowCommands, int port, CallbackInfoReturnable<Boolean> cir) {
         if (!cir.getReturnValue()) {
             return;

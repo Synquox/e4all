@@ -6,5 +6,15 @@
     "text.e4all_minecraft.error": "سبواه رالت تله برلاکو دالم e4all",
     "text.e4all_minecraft.doctor.start": "سدڠ منجان معلومت ڤڽلساين مسئله. سيلا توڠݢو.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all تله دموات تورون درڤد سومبر يڠ تيدق دکتاهوءي. سالينن e4all اين موڠکين کتيڠݢلن زمان اتاو دأوبه سواي.",
-    "text.e4all_minecraft.hiddenDomain": "دسمبوڽيکن⹁ کليک اونتوق سالين"
+    "text.e4all_minecraft.hiddenDomain": "دسمبوڽيکن⹁ کليک اونتوق سالين",
+    "text.e4all_minecraft.offlineMode": "Online Mode: ",
+    "text.e4all_minecraft.offlineModeEnabled": "مود offline دداياكن — كلين تيدق رسمي (cracked) كيني بوليه مڽرتاي",
+    "text.e4all_minecraft.offlineModeDisabled": "مود offline دلومڤوهكن — ڤڠساهن Microsoft دڤرلوكن",
+    "text.e4all_minecraft.offlineModeWarning": "⚠ امرن: مود Offline دداياكن! ڤڠساهن دلومڤوهكن, جادي سسياڤا سهاج دڠن سبارڠ نام ڤڠݢونا بوليه مڽرتاي. اين تيدق بوليه دبطلكن اونتوق سيسي اين.",
+    "text.e4all_minecraft.offlineModeOn": "ON",
+    "text.e4all_minecraft.offlineModeOff": "OFF",
+    "text.e4all_minecraft.onlineMode": "Online Mode: ",
+    "text.e4all_minecraft.onlineModeTrue": "True",
+    "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
+    "text.e4all_minecraft.reconnecting": "e4all: سمبوڠن ݢݢنتي ترڤوتوس, چوبا مڽمبوڠ سمولا..."
 }
