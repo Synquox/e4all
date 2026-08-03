@@ -1,5 +1,12 @@
 # Changelog
 
+### 2.0.0-beta.2 (upstream port: e4mc 6.2.1)
+
+### Upstream Port
+ * Ported changes from upstream e4mc 6.1.1 through 6.2.1
+ * Updated Gradle (8.14.4 → 9.6.1), Shadow plugin (8.3.6 → 9.6.1), and mod-publish-plugin (1.1.0 → 2.1.1)
+ * Fixed Dialtone connection issues in Minecraft 1.19 by removing stale address caching (upstream 6.2.1 fix)
+
 ### 2.0.0-beta
 
 ### New Feature

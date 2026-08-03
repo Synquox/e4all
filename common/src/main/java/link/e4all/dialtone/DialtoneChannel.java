@@ -23,8 +23,7 @@ public class DialtoneChannel extends AbstractChannel {
     volatile boolean closed = false;
     AtomicBoolean readInFlight = new AtomicBoolean(false);
     AtomicBoolean writeInFlight = new AtomicBoolean(false);
-    private volatile SocketAddress cachedLocalAddress;
-    volatile SocketAddress cachedRemoteAddress;
+
 
     public DialtoneChannel() {
         super(null);
@@ -51,12 +50,12 @@ public class DialtoneChannel extends AbstractChannel {
 
     @Override
     protected SocketAddress localAddress0() {
-        return cachedLocalAddress;
+        return endpoint != null ? new DialtoneAddress(endpoint.address()) : null;
     }
 
     @Override
     protected SocketAddress remoteAddress0() {
-        return cachedRemoteAddress;
+        return connection != null ? new DialtoneAddress(connection.peerAddress()) : null;
     }
 
     @Override
@@ -245,13 +244,11 @@ public class DialtoneChannel extends AbstractChannel {
                         DialtoneAmbientSession.INSTANCE.start();
                     }
                     endpoint = DialtoneAmbientSession.INSTANCE.endpoint;
-                    cachedLocalAddress = new DialtoneAddress(endpoint.address());
                     DialtoneAmbientSession.INSTANCE
                             .endpoint
                             .connect(dialtoneAddress.actualAddress, "e4mc-dialtone".getBytes(StandardCharsets.UTF_8))
                             .thenAccept(conn -> {
                                 connection = conn;
-                                cachedRemoteAddress = new DialtoneAddress(conn.peerAddress());
                                 conn.openBi().thenAccept(bidi -> {
                                     stream = bidi;
                                     eventLoop().execute(() -> {
