@@ -3,12 +3,12 @@ package link.e4all;
 import net.minecraft.network.Connection;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class OpSessionClient {
-    private static final Map<String, String> secrets = new HashMap<>();
-    private static Connection connection;
+    private static final Map<String, String> secrets = new ConcurrentHashMap<>();
+    private static volatile Connection connection;
 
     private OpSessionClient() {}
 

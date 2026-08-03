@@ -255,7 +255,7 @@ public class Mirror {
                 return (boolean) method.invoke(server, profile);
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
         }
-        throw new RuntimeException("Could not locate any way to call isSingleplayerOwner!");
+        return false;
     }
 
     public static boolean isSingleplayerOwnerObj(MinecraftServer server, Object maybeProfile) {
@@ -266,7 +266,39 @@ public class Mirror {
                 return (boolean) method.invoke(server, maybeProfile);
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
         }
-        throw new RuntimeException("Could not locate any way to call isSingleplayerOwner!");
+        if (maybeProfile instanceof com.mojang.authlib.GameProfile gp) {
+            for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+                for (Method method : clazz2.getMethods()) {
+                    if (!method.getName().equals(methodName)) continue;
+                    if (method.getParameterCount() != 1) continue;
+                    if (method.getReturnType() != boolean.class) continue;
+                    Class<?> paramType = method.getParameterTypes()[0];
+                    Object adapted = adaptProfile(gp, paramType);
+                    if (adapted != null) {
+                        try {
+                            return (boolean) method.invoke(server, adapted);
+                        } catch (IllegalAccessException | InvocationTargetException ignored) {}
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Object adaptProfile(com.mojang.authlib.GameProfile profile, Class<?> targetType) {
+        if (targetType.isInstance(profile)) return profile;
+        for (Method m : com.mojang.authlib.GameProfile.class.getMethods()) {
+            if (m.getParameterCount() == 0 && targetType.isAssignableFrom(m.getReturnType())) {
+                try {
+                    return m.invoke(profile);
+                } catch (Throwable ignored) {}
+            }
+        }
+        try {
+            java.lang.reflect.Constructor<?> ctor = targetType.getConstructor(java.util.UUID.class, String.class);
+            return ctor.newInstance(profile.getId(), profile.getName());
+        } catch (Throwable ignored) {}
+        return null;
     }
 
     public static void setUsingWhitelist(MinecraftServer server, PlayerList playerList, boolean enabled) {

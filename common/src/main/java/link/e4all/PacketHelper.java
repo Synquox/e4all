@@ -97,13 +97,17 @@ public final class PacketHelper {
             try {
                 Class<?> pktCls = Class.forName(cls);
                 FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
-                for (Constructor<?> ctor : pktCls.getConstructors()) {
-                    Class<?>[] p = ctor.getParameterTypes();
-                    if (p.length == 2
-                            && ResourceLocation.class.isAssignableFrom(p[0])
-                            && FriendlyByteBuf.class.isAssignableFrom(p[1])) {
-                        return (Packet<?>) ctor.newInstance(channel, buf);
+                try {
+                    for (Constructor<?> ctor : pktCls.getConstructors()) {
+                        Class<?>[] p = ctor.getParameterTypes();
+                        if (p.length == 2
+                                && ResourceLocation.class.isAssignableFrom(p[0])
+                                && FriendlyByteBuf.class.isAssignableFrom(p[1])) {
+                            return (Packet<?>) ctor.newInstance(channel, buf);
+                        }
                     }
+                } finally {
+                    buf.release();
                 }
             } catch (ClassNotFoundException ignored) {
             } catch (Throwable t) {

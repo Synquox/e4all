@@ -58,7 +58,7 @@ public class E4allClient {
         try {
             playerId = UUID.fromString(StringArgumentType.getString(context, "player"));
         } catch (IllegalArgumentException e) {
-            Mirror.sendFailureToSource(context.getSource(), Mirror.literal("e4all: Invalid player id."));
+            Mirror.sendFailureToSource(context.getSource(), Mirror.translatable("text.e4all_minecraft.error.invalidPlayerId"));
             return 0;
         }
 
@@ -69,7 +69,7 @@ public class E4allClient {
             default -> false;
         };
         if (!handled) {
-            Mirror.sendFailureToSource(context.getSource(), Mirror.literal("e4all: That player has no pending OP verification."));
+            Mirror.sendFailureToSource(context.getSource(), Mirror.translatable("text.e4all_minecraft.error.noPendingOpVerification"));
             return 0;
         }
         return 1;
@@ -147,9 +147,9 @@ public class E4allClient {
                                     }
                                     E4allClient.session = new QuiclimeSession(rawHandler, group);
                                     E4allClient.session.startAsync();
-                                    Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal("e4all: Restarting relay connection..."));
+                                    Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4all_minecraft.restartingRelay"));
                                 } else {
-                                    Mirror.sendFailureToSource(ctx.getSource(), Mirror.literal("e4all: No active session to restart."));
+                                    Mirror.sendFailureToSource(ctx.getSource(), Mirror.translatable("text.e4all_minecraft.error.noActiveSession"));
                                 }
                             }
                             return 1;
@@ -162,7 +162,7 @@ public class E4allClient {
                                     ? "text.e4all_minecraft.offlineModeDisabled"
                                     : "text.e4all_minecraft.offlineModeEnabled"));
                             Mirror.sendSuccessToSource(ctx.getSource(),
-                                Mirror.withStyle(Mirror.literal("Note: This change applies to new connections only."), it ->
+                                Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeNote"), it ->
                                     it.withColor(net.minecraft.ChatFormatting.GRAY)));
                             return 1;
                         }))

@@ -35,7 +35,11 @@ public abstract class PlayerListMixin {
     @Inject(method = "/^<init>$/", at = @At("TAIL"), require = 0)
     void injectListLoads(CallbackInfo ci) {
         if (Config.INSTANCE.restoreDedicatedCommands.value()) {
-            Mirror.setUsingWhitelist(getServer(), (PlayerList) (Object) this, Config.INSTANCE.useWhiteList.value());
+            try {
+                Mirror.setUsingWhitelist(getServer(), (PlayerList) (Object) this, Config.INSTANCE.useWhiteList.value());
+            } catch (RuntimeException e) {
+                E4allClient.LOGGER.warn("Failed to set whitelist state: ", e);
+            }
             try {
                 this.getBans().load();
             } catch (IOException e) {
@@ -51,9 +55,15 @@ public abstract class PlayerListMixin {
 
     @Inject(method = "canPlayerLogin", at = @At("HEAD"), cancellable = true, require = 0)
     public void allowOwnerLogin(SocketAddress socketAddress, GameProfile gameProfile, CallbackInfoReturnable<Component> cir) {
-        if (socketAddress == null || Mirror.isSingleplayerOwnerObj(getServer(), gameProfile)) {
+        if (socketAddress == null) {
             cir.setReturnValue(null);
+            return;
         }
+        try {
+            if (Mirror.isSingleplayerOwnerObj(getServer(), gameProfile)) {
+                cir.setReturnValue(null);
+            }
+        } catch (RuntimeException ignored) {}
     }
 
     @Inject(method = "placeNewPlayer", at = @At("HEAD"), require = 0)

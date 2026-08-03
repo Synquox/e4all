@@ -9,11 +9,10 @@ import net.minecraft.server.level.ServerPlayer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class OpSessionManager {
     private static final char[] CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789".toCharArray();
@@ -23,13 +22,13 @@ public final class OpSessionManager {
     private static final long VERIFY_RETRY_COOLDOWN_MILLIS = 1_000L;
     private static final long AUTO_VERIFY_GRACE_MILLIS = 2_500L;
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final Map<UUID, SessionSecret> secrets = new HashMap<>();
-    private static final Map<UUID, PendingVerification> pending = new HashMap<>();
-    private static final Set<UUID> denied = new HashSet<>();
-    private static final Set<UUID> capableClients = new HashSet<>();
-    private static MinecraftServer activeServer;
-    private static String sessionToken;
-    private static boolean protectOfflineOps;
+    private static final Map<UUID, SessionSecret> secrets = new ConcurrentHashMap<>();
+    private static final Map<UUID, PendingVerification> pending = new ConcurrentHashMap<>();
+    private static final Set<UUID> denied = ConcurrentHashMap.newKeySet();
+    private static final Set<UUID> capableClients = ConcurrentHashMap.newKeySet();
+    private static volatile MinecraftServer activeServer;
+    private static volatile String sessionToken;
+    private static volatile boolean protectOfflineOps;
 
     private OpSessionManager() {}
 
@@ -87,7 +86,7 @@ public final class OpSessionManager {
 
         ServerPlayer host = findHost(server);
         if (host != null) {
-            host.sendSystemMessage(Mirror.literal("e4all: OP session code for " + profile.getName() + ": " + code));
+            host.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.opSessionCode", profile.getName(), code));
         }
     }
 
@@ -110,10 +109,10 @@ public final class OpSessionManager {
         denied.remove(playerId);
         PendingVerification verification = pending.computeIfAbsent(playerId,
                 ignored -> new PendingVerification(player.getGameProfile().getName(), System.currentTimeMillis()));
-        player.sendSystemMessage(Mirror.literal("e4all: Your previous OP session must be verified. Use /e4all op verify <code>."));
+        player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.verifyPreviousOpSession"));
         if (!secrets.containsKey(playerId)) {
             verification.state = VerificationState.ESCALATED;
-            notifyHost(server, playerId, verification, "reconnected without an OP session code");
+            notifyHost(server, playerId, verification, "text.e4all_minecraft.reason.reconnectedNoOpCode");
         }
         requestAutomaticVerification(server, player, verification);
     }
@@ -162,18 +161,18 @@ public final class OpSessionManager {
         PendingVerification verification = pending.get(playerId);
         SessionSecret secret = secrets.get(playerId);
         if (verification == null) {
-            player.sendSystemMessage(Mirror.literal("e4all: You do not have an OP session waiting for verification."));
+            player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.noOpSessionWaiting"));
             return false;
         }
 
         if (verification.state == VerificationState.ESCALATED) {
-            player.sendSystemMessage(Mirror.literal("e4all: The host must decide this OP verification."));
+            player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.hostMustDecideOp"));
             return false;
         }
 
         long now = System.currentTimeMillis();
         if (now - verification.lastAttemptAt < VERIFY_RETRY_COOLDOWN_MILLIS) {
-            player.sendSystemMessage(Mirror.literal("e4all: Please wait before trying another OP session code."));
+            player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.pleaseWaitOpCode"));
             return false;
         }
         verification.lastAttemptAt = now;
@@ -182,17 +181,17 @@ public final class OpSessionManager {
             pending.remove(playerId);
             denied.remove(playerId);
             server.getPlayerList().sendPlayerPermissionLevel(player);
-            player.sendSystemMessage(Mirror.literal("e4all: Your OP session has been verified."));
+            player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.opSessionVerified"));
             ServerPlayer host = findHost(server);
             if (host != null && host != player) {
-                host.sendSystemMessage(Mirror.literal("e4all: " + player.getGameProfile().getName() + " verified their OP session."));
+                host.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.playerVerifiedOpSession", player.getGameProfile().getName()));
             }
             return true;
         }
 
-        player.sendSystemMessage(Mirror.literal("e4all: That OP session code is not valid."));
+        player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.invalidOpCode"));
         verification.state = VerificationState.ESCALATED;
-        notifyHost(server, playerId, verification, "could not verify their previous OP session");
+        notifyHost(server, playerId, verification, "text.e4all_minecraft.reason.couldNotVerifyOp");
         return false;
     }
 
@@ -209,7 +208,7 @@ public final class OpSessionManager {
         pending.remove(playerId);
         denied.add(playerId);
         server.getPlayerList().sendPlayerPermissionLevel(player);
-        player.sendSystemMessage(Mirror.literal("e4all: The host allowed you to stay without OP rights."));
+        player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.hostAllowedWithoutOp"));
         return true;
     }
 
@@ -228,7 +227,7 @@ public final class OpSessionManager {
         String code = newCode();
         secrets.put(playerId, new SessionSecret(code));
         server.getPlayerList().sendPlayerPermissionLevel(player);
-        player.sendSystemMessage(Mirror.literal("e4all: The host restored your OP rights."));
+        player.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.hostRestoredOp"));
         sendSecret(player, code);
         return true;
     }
@@ -244,7 +243,7 @@ public final class OpSessionManager {
         }
 
         pending.remove(playerId);
-        player.connection.disconnect(Mirror.literal("e4all: The host did not restore your OP session."));
+        player.connection.disconnect(Mirror.translatable("text.e4all_minecraft.hostDidNotRestoreOp"));
         return true;
     }
 
@@ -271,7 +270,7 @@ public final class OpSessionManager {
             }
             if (verification.state == VerificationState.PENDING && now - verification.connectedAt >= VERIFY_TIMEOUT_MILLIS) {
                 verification.state = VerificationState.ESCALATED;
-                notifyHost(server, entry.getKey(), verification, "did not verify their previous OP session in time");
+                notifyHost(server, entry.getKey(), verification, "text.e4all_minecraft.reason.didNotVerifyOpInTime");
             }
         }
     }
@@ -306,7 +305,7 @@ public final class OpSessionManager {
 
     private static void sendCode(ServerPlayer player, String code) {
         Component message = Mirror.withStyle(
-                Mirror.literal("e4all: Your OP session code is " + code + ". Keep it private."),
+                Mirror.translatable("text.e4all_minecraft.yourOpCode", code),
                 style -> style.withColor(ChatFormatting.YELLOW).withClickEvent(Mirror.copyToClipboard(code))
         );
         player.sendSystemMessage(message);
@@ -335,14 +334,14 @@ public final class OpSessionManager {
             return;
         }
 
-        host.sendSystemMessage(Mirror.literal("e4all: " + verification.name + " " + reason + ". They have no OP rights."));
-        host.sendSystemMessage(actionMessage("Kick", "/e4all op kick " + playerId, ChatFormatting.RED));
-        host.sendSystemMessage(actionMessage("Allow without OP", "/e4all op allow " + playerId, ChatFormatting.YELLOW));
-        host.sendSystemMessage(actionMessage("Restore OP", "/e4all op restore " + playerId, ChatFormatting.GREEN));
+        host.sendSystemMessage(Mirror.translatable("text.e4all_minecraft.hostNotifyOpIssue", verification.name, Mirror.translatable(reason)));
+        host.sendSystemMessage(actionMessage("text.e4all_minecraft.action.kick", "/e4all op kick " + playerId, ChatFormatting.RED));
+        host.sendSystemMessage(actionMessage("text.e4all_minecraft.action.allowWithoutOp", "/e4all op allow " + playerId, ChatFormatting.YELLOW));
+        host.sendSystemMessage(actionMessage("text.e4all_minecraft.action.restoreOp", "/e4all op restore " + playerId, ChatFormatting.GREEN));
     }
 
-    private static Component actionMessage(String label, String command, ChatFormatting color) {
-        return Mirror.withStyle(Mirror.literal("[" + label + "]"),
+    private static Component actionMessage(String translationKey, String command, ChatFormatting color) {
+        return Mirror.withStyle(Mirror.translatable(translationKey),
                 style -> style.withColor(color).withClickEvent(Mirror.runCommand(command)));
     }
 

@@ -1,6 +1,7 @@
 package link.e4all.mixin;
 
 import com.mojang.authlib.GameProfile;
+import link.e4all.Mirror;
 import link.e4all.OpSessionManager;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.server.MinecraftServer;
@@ -26,7 +27,7 @@ public abstract class IntegratedServerMixin {
         }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             GameProfile profile = player.getGameProfile();
-            if (server.isSingleplayerOwner(profile)) {
+            if (Mirror.isSingleplayerOwnerObj(server, profile)) {
                 server.getPlayerList().op(profile);
                 return;
             }
