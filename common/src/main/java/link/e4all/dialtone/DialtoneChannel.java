@@ -23,6 +23,7 @@ public class DialtoneChannel extends AbstractChannel {
     volatile boolean closed = false;
     AtomicBoolean readInFlight = new AtomicBoolean(false);
     AtomicBoolean writeInFlight = new AtomicBoolean(false);
+    AtomicBoolean writePending = new AtomicBoolean(false);
 
 
     public DialtoneChannel() {
@@ -73,7 +74,6 @@ public class DialtoneChannel extends AbstractChannel {
         if (closed) {
             return;
         }
-        boolean wasActive = stream != null;
         closed = true;
         try {
             if (stream != null) {
@@ -91,13 +91,6 @@ public class DialtoneChannel extends AbstractChannel {
         }
         stream = null;
         connection = null;
-        if (wasActive) {
-            if (eventLoop().inEventLoop()) {
-                pipeline().fireChannelInactive();
-            } else {
-                eventLoop().execute(() -> pipeline().fireChannelInactive());
-            }
-        }
     }
 
     @Override
@@ -141,72 +134,79 @@ public class DialtoneChannel extends AbstractChannel {
     @Override
     protected void doWrite(ChannelOutboundBuffer in) {
         if (!writeInFlight.compareAndSet(false, true)) {
+            writePending.set(true);
             return;
         }
         doWriteNext(in);
     }
 
     private void doWriteNext(ChannelOutboundBuffer in) {
-        Object msg = in.current();
-        if (msg == null) {
-            writeInFlight.set(false);
-            return;
-        }
-        if (msg instanceof ByteBuf buf) {
-            if (!buf.isReadable()) {
-                in.remove();
-                doWriteNext(in);
+        ByteBuf buf = null;
+        while (true) {
+            Object msg = in.current();
+            if (msg == null) {
+                writeInFlight.set(false);
+                if (writePending.compareAndSet(true, false) && !closed) {
+                    eventLoop().execute(() -> unsafe().flush());
+                }
                 return;
             }
-            ByteBuffer byteBuffer = null;
-            try {
-                byteBuffer = buf.nioBuffer();
-                if (!byteBuffer.isDirect()) {
-                    byteBuffer = null;
-                }
-            } catch (UnsupportedOperationException ignored) {
-            }
-            try {
-                if (byteBuffer == null) {
-                    int len = buf.readableBytes();
-                    byte[] arr = new byte[len];
-                    buf.readBytes(arr, 0, len);
-                    stream.writeIrohStreamByteArray(arr, 0, arr.length).thenAccept(nothing -> {
-                        // Dispatch back to event loop — ChannelOutboundBuffer is not thread-safe
-                        eventLoop().execute(() -> {
-                            in.remove();
-                            doWriteNext(in);
-                        });
-                    }).exceptionally(t -> {
-                        eventLoop().execute(() -> {
-                            in.remove(t);
-                            writeInFlight.set(false);
-                        });
-                        return null;
-                    });
-                } else {
-                    final int pos = byteBuffer.position();
-                    final int rem = byteBuffer.remaining();
-                    stream.writeIrohStreamByteBuffer(byteBuffer, pos, rem).thenAccept(nothing -> {
-                        eventLoop().execute(() -> {
-                            in.remove();
-                            doWriteNext(in);
-                        });
-                    }).exceptionally(t -> {
-                        eventLoop().execute(() -> {
-                            in.remove(t);
-                            writeInFlight.set(false);
-                        });
-                        return null;
-                    });
-                }
-            } catch (Throwable e) {
-                in.remove(e);
+            if (!(msg instanceof ByteBuf candidate)) {
+                in.remove(new UnsupportedOperationException(
+                        "unsupported message type: " + StringUtil.simpleClassName(msg)));
                 writeInFlight.set(false);
+                return;
             }
-        } else {
-            in.remove(new UnsupportedOperationException(
-                    "unsupported message type: " + StringUtil.simpleClassName(msg)));
+            if (!candidate.isReadable()) {
+                in.remove();
+                continue;
+            }
+            buf = candidate;
+            break;
+        }
+        ByteBuffer byteBuffer = null;
+        try {
+            byteBuffer = buf.nioBuffer();
+            if (!byteBuffer.isDirect()) {
+                byteBuffer = null;
+            }
+        } catch (UnsupportedOperationException ignored) {
+        }
+        try {
+            if (byteBuffer == null) {
+                int len = buf.readableBytes();
+                byte[] arr = new byte[len];
+                buf.readBytes(arr, 0, len);
+                stream.writeIrohStreamByteArray(arr, 0, arr.length).thenAccept(nothing -> {
+                    eventLoop().execute(() -> {
+                        in.remove();
+                        doWriteNext(in);
+                    });
+                }).exceptionally(t -> {
+                    eventLoop().execute(() -> {
+                        in.remove(t);
+                        writeInFlight.set(false);
+                    });
+                    return null;
+                });
+            } else {
+                final int pos = byteBuffer.position();
+                final int rem = byteBuffer.remaining();
+                stream.writeIrohStreamByteBuffer(byteBuffer, pos, rem).thenAccept(nothing -> {
+                    eventLoop().execute(() -> {
+                        in.remove();
+                        doWriteNext(in);
+                    });
+                }).exceptionally(t -> {
+                    eventLoop().execute(() -> {
+                        in.remove(t);
+                        writeInFlight.set(false);
+                    });
+                    return null;
+                });
+            }
+        } catch (Throwable e) {
+            in.remove(e);
             writeInFlight.set(false);
         }
     }

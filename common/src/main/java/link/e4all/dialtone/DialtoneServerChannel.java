@@ -4,6 +4,7 @@ import io.netty.channel.AbstractServerChannel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.DefaultChannelConfig;
 import io.netty.channel.EventLoop;
+import link.e4all.AndroidDetector;
 import link.e4all.E4allClient;
 import link.e4all.QuiclimeSession;
 import link.e4mc.iroh.Endpoint;
@@ -31,6 +32,10 @@ public class DialtoneServerChannel extends AbstractServerChannel {
 
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
+        if (AndroidDetector.isAndroid()) {
+            E4allClient.LOGGER.warn("e4all: Dialtone server (iroh) is not supported on Android — native library requires glibc, Android uses bionic libc.");
+            throw new UnsupportedOperationException("Dialtone is not supported on Android (bionic libc)");
+        }
         this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
         this.dispatcher = new Thread(() -> {
                 while (true) {
@@ -103,11 +108,15 @@ public class DialtoneServerChannel extends AbstractServerChannel {
 
     @Override
     protected void doBeginRead() throws Exception {
+        if (endpoint == null) return;
         endpoint.accept().thenAccept(preconn -> {
             E4allClient.LOGGER.info("preconn accepted, dialtone child registered");
             var channel = new DialtoneChannel(this);
-            // All pipeline events must be dispatched on the event loop thread
             eventLoop().execute(() -> {
+                if (closed) {
+                    channel.closed = true;
+                    return;
+                }
                 pipeline().fireChannelRead(channel);
                 pipeline().fireChannelReadComplete();
                 if (!closed && config().isAutoRead()) {

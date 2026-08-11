@@ -1,49 +1,65 @@
 package link.e4all;
 
 import net.minecraft.network.Connection;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class OpSessionPayload {
     private static final String NAMESPACE = "e4all";
     private static final String CLIENT_HELLO_PATH = "op-client";
     private static final String SECRET_PREFIX = "op-secret/";
     private static final String VERIFY_PREFIX = "op-verify/";
-    private static final ResourceLocation CLIENT_HELLO = resourceLocation(NAMESPACE, CLIENT_HELLO_PATH);
+
+    private static final AtomicReference<Object> clientHelloRef = new AtomicReference<>();
 
     private OpSessionPayload() {}
 
+    private static Object clientHello() {
+        Object cached = clientHelloRef.get();
+        if (cached != null) return cached;
+        Object created = ResourceLocReflector.create(NAMESPACE, CLIENT_HELLO_PATH);
+        clientHelloRef.compareAndSet(null, created);
+        return clientHelloRef.get();
+    }
+
     public static void announceClient(Connection connection) {
-        PacketHelper.sendServerbound(connection, CLIENT_HELLO);
+        PacketHelper.sendServerbound(connection, clientHello());
+    }
+
+    static Object resourceLocation(String namespace, String path) {
+        return ResourceLocReflector.create(namespace, path);
     }
 
     public static void sendSecret(ServerPlayer player, String sessionToken, String code) {
         PacketHelper.sendClientbound(player,
-                resourceLocation(NAMESPACE, SECRET_PREFIX + sessionToken + "/" + code),
+                ResourceLocReflector.create(NAMESPACE, SECRET_PREFIX + sessionToken + "/" + code),
                 new byte[0]);
     }
 
     public static void requestVerification(ServerPlayer player, String sessionToken) {
         PacketHelper.sendClientbound(player,
-                resourceLocation(NAMESPACE, VERIFY_PREFIX + sessionToken),
+                ResourceLocReflector.create(NAMESPACE, VERIFY_PREFIX + sessionToken),
                 new byte[0]);
     }
 
     public static void sendVerification(Connection connection, String sessionToken, String code) {
         PacketHelper.sendServerbound(connection,
-                resourceLocation(NAMESPACE, VERIFY_PREFIX + sessionToken + "/" + code));
+                ResourceLocReflector.create(NAMESPACE, VERIFY_PREFIX + sessionToken + "/" + code));
     }
 
-    public static boolean isClientHello(ResourceLocation id) {
-        return NAMESPACE.equals(id.getNamespace()) && CLIENT_HELLO_PATH.equals(id.getPath());
+    public static boolean isClientHello(Object id) {
+        if (id == null) return false;
+        return NAMESPACE.equals(ResourceLocReflector.getNamespace(id))
+                && CLIENT_HELLO_PATH.equals(ResourceLocReflector.getPath(id));
     }
 
-    public static String[] parseSecret(ResourceLocation id) {
+    public static String[] parseSecret(Object id) {
         String[] values = split(id, SECRET_PREFIX, 2);
         return values != null ? values : null;
     }
 
-    public static String parseVerification(ResourceLocation id, String expectedSessionToken) {
+    public static String parseVerification(Object id, String expectedSessionToken) {
         if (expectedSessionToken == null) {
             return null;
         }
@@ -54,33 +70,26 @@ public final class OpSessionPayload {
         return values[1];
     }
 
-    public static String parseVerificationRequest(ResourceLocation id) {
+    public static String parseVerificationRequest(Object id) {
         String[] values = split(id, VERIFY_PREFIX, 1);
         return values == null ? null : values[0];
     }
 
-    private static String[] split(ResourceLocation id, String prefix, int parts) {
-        if (!NAMESPACE.equals(id.getNamespace()) || !id.getPath().startsWith(prefix)) {
+    private static String[] split(Object id, String prefix, int parts) {
+        if (id == null) return null;
+        String namespace = ResourceLocReflector.getNamespace(id);
+        String path = ResourceLocReflector.getPath(id);
+        if (namespace == null || path == null) return null;
+        if (!NAMESPACE.equals(namespace) || !path.startsWith(prefix)) {
             return null;
         }
-        String[] values = id.getPath().substring(prefix.length()).split("/");
+        String[] values = path.substring(prefix.length()).split("/");
         if (values.length != parts) {
             return null;
         }
-        return values;
-    }
-
-    static ResourceLocation resourceLocation(String namespace, String path) {
-        try {
-            java.lang.reflect.Method m = ResourceLocation.class.getMethod("fromNamespaceAndPath", String.class, String.class);
-            return (ResourceLocation) m.invoke(null, namespace, path);
-        } catch (ReflectiveOperationException ignored) {}
-        try {
-            java.lang.reflect.Constructor<ResourceLocation> ctor = ResourceLocation.class.getDeclaredConstructor(String.class, String.class);
-            ctor.setAccessible(true);
-            return ctor.newInstance(namespace, path);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Could not create ResourceLocation", e);
+        for (String v : values) {
+            if (v.isEmpty()) return null;
         }
+        return values;
     }
 }

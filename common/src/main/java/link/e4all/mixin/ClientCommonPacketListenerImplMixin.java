@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ClientCommonPacketListenerImplMixin {
     @Inject(method = "handleCustomPayload", at = @At("HEAD"), require = 0)
     private void e4all$handleOpSessionPayload(ClientboundCustomPayloadPacket packet, CallbackInfo ci) {
-        net.minecraft.resources.ResourceLocation id = link.e4all.PacketHelper.extractPayloadId(packet.payload());
+        Object id = link.e4all.PacketHelper.extractPayloadId(packet.payload());
         if (id != null) OpSessionClient.handlePayload(id);
     }
 }

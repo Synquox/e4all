@@ -40,5 +40,7 @@
     "text.e4all_minecraft.reason.didNotVerifyOpInTime": "ei kinnitanud oma eelmist OP seanssi õigeaegselt",
     "text.e4all_minecraft.action.kick": "Viska välja",
     "text.e4all_minecraft.action.allowWithoutOp": "Luba ilma OP-ta",
-    "text.e4all_minecraft.action.restoreOp": "Taasta OP"
+    "text.e4all_minecraft.action.restoreOp": "Taasta OP",
+    "text.e4all_minecraft.error.androidUnsupported": "e4all: Hosting is not supported on Android. The QUIC tunnel requires native libraries built for desktop Linux/Windows/macOS.",
+    "text.e4all_minecraft.error.nativeLoadFailed": "e4all: Failed to load native library. This platform may not be supported. Run /e4all doctor for details."
 }

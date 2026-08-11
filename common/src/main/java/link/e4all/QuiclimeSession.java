@@ -153,7 +153,17 @@ public class QuiclimeSession {
             var buf = new byte[size];
             in.readBytes(buf);
             var json = gson.fromJson(new String(buf, StandardCharsets.UTF_8), JsonObject.class);
-            switch (json.get("kind").getAsString()) {
+            if (json == null) {
+                LOGGER.warn("Received empty/malformed control message");
+                return;
+            }
+            var kindElement = json.get("kind");
+            if (kindElement == null || kindElement.isJsonNull()) {
+                LOGGER.warn("Received control message with no 'kind' field: {}", json);
+                return;
+            }
+            String kind = kindElement.getAsString();
+            switch (kind) {
                 case "domain_assignment_complete":
                     out.add(gson.fromJson(json, DomainAssignmentCompleteMessageClientbound.class));
                     break;
@@ -170,7 +180,7 @@ public class QuiclimeSession {
                     out.add(gson.fromJson(json, UnknownMessageMessageClientbound.class));
                     break;
                 default:
-                    LOGGER.warn("Unknown control message kind: {}", json.get("kind").getAsString());
+                    LOGGER.warn("Unknown control message kind: {}", kind);
                     break;
             }
         }
@@ -198,9 +208,9 @@ public class QuiclimeSession {
     }
 
     final EventLoopGroup group;
-    private DatagramChannel datagramChannel;
-    private QuicChannel quicChannel;
-    private DialtoneServerChannel dialtoneChannel;
+    private volatile DatagramChannel datagramChannel;
+    private volatile QuicChannel quicChannel;
+    private volatile DialtoneServerChannel dialtoneChannel;
     private volatile ScheduledFuture<?> keepaliveFuture;
 
     public QuiclimeSession(ChannelHandler handler, EventLoopGroup group) {
@@ -339,13 +349,15 @@ public class QuiclimeSession {
                                         var reconnectThread = new Thread(() -> {
                                             try {
                                                 Thread.sleep(delay * 1000L);
-                                                State currentState = state;
-                                                if (currentState == State.RECONNECTING) {
-                                                    link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
-                                                    QuiclimeSession.this.cleanupChannels();
-                                                    start();
-                                                } else {
-                                                    LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
+                                                synchronized (E4allClient.SESSION_LOCK) {
+                                                    State currentState = state;
+                                                    if (currentState == State.RECONNECTING) {
+                                                        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
+                                                        QuiclimeSession.this.cleanupChannels();
+                                                        start();
+                                                    } else {
+                                                        LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
+                                                    }
                                                 }
                                             } catch (InterruptedException ignored) {
                                                 state = State.STOPPED;
@@ -494,16 +506,30 @@ public class QuiclimeSession {
                         LOGGER.info("control channel open: {}", streamChannel);
                         streamChannel
                                 .writeAndFlush(new ControlMessageCodec.ProbeCapabilitiesMessageServerbound())
-                                .addListener(ignored -> LOGGER.info("probing capabilities"));
+                                .addListener(f -> {
+                                    if (!f.isSuccess()) {
+                                        LOGGER.warn("ProbeCapabilities write failed", f.cause());
+                                        fail(f.cause());
+                                    } else {
+                                        LOGGER.info("probing capabilities");
+                                    }
+                                });
                         streamChannel
                                 .writeAndFlush(new ControlMessageCodec.RequestDomainAssignmentMessageServerbound())
-                                .addListener(ignored -> LOGGER.info("control channel write complete"));
+                                .addListener(f -> {
+                                    if (!f.isSuccess()) {
+                                        LOGGER.warn("RequestDomainAssignment write failed", f.cause());
+                                        fail(f.cause());
+                                    } else {
+                                        LOGGER.info("control channel write complete");
+                                    }
+                                });
                         quicChannel.closeFuture().addListener(ignored -> datagramChannel.close());
                     });
                 });
             });
         } catch (Throwable e) {
-            fail(e);
+            failWithDiagnostics(e);
         }
     }
 
@@ -535,6 +561,48 @@ public class QuiclimeSession {
         }
     }
 
+    private void failWithDiagnostics(Throwable e) {
+        Throwable cursor = e;
+        UnsatisfiedLinkError linkError = null;
+        while (cursor != null) {
+            if (cursor instanceof UnsatisfiedLinkError ule) {
+                linkError = ule;
+                break;
+            }
+            cursor = cursor.getCause();
+        }
+
+        QuiclimeSession.this.state = State.UNHEALTHY;
+        failureCause = e;
+
+        if (linkError != null) {
+            AndroidDetector.DetectionResult androidCheck = AndroidDetector.detect();
+            if (androidCheck.isAndroid()) {
+                E4allClient.LOGGER.error("e4all: Failed to load native QUIC library on Android. " +
+                        "The bundled native library requires glibc (desktop Linux), but Android uses bionic libc. " +
+                        "Detection: {}. Linker error: {}", androidCheck.reason(), linkError.getMessage(), e);
+                if (Agnos.isClient()) {
+                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error.androidUnsupported"));
+                }
+            } else {
+                E4allClient.LOGGER.error("e4all: Failed to load native QUIC library. " +
+                        "Platform: os.name={}, os.arch={}, java.vm.name={}. Linker error: {}",
+                        System.getProperty("os.name", "unknown"),
+                        System.getProperty("os.arch", "unknown"),
+                        System.getProperty("java.vm.name", "unknown"),
+                        linkError.getMessage(), e);
+                if (Agnos.isClient()) {
+                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error.nativeLoadFailed"));
+                }
+            }
+        } else {
+            E4allClient.LOGGER.error("error in e4all", e);
+            if (Agnos.isClient()) {
+                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error"));
+            }
+        }
+    }
+
     private static void afterCloseIfPresent(Channel channel, Consumer<Boolean> callback) {
         if (channel == null) {
             callback.accept(false);
@@ -547,6 +615,18 @@ public class QuiclimeSession {
         state = State.STOPPING;
         cancelKeepalive();
         afterCloseIfPresent(dialtoneChannel, q -> afterCloseIfPresent(quicChannel, a -> afterCloseIfPresent(datagramChannel, b -> state = State.STOPPED)));
+    }
+
+    public void stopSync() {
+        state = State.STOPPING;
+        cancelKeepalive();
+        try { if (dialtoneChannel != null && dialtoneChannel.isOpen()) dialtoneChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
+        try { if (quicChannel != null && quicChannel.isOpen()) quicChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
+        try { if (datagramChannel != null && datagramChannel.isOpen()) datagramChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
+        dialtoneChannel = null;
+        quicChannel = null;
+        datagramChannel = null;
+        state = State.STOPPED;
     }
 
     private void cleanupChannels() {

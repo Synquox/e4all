@@ -4,7 +4,6 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.network.Connection;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,14 +18,24 @@ public final class PacketHelper {
 
     private PacketHelper() {}
 
-    public static ResourceLocation extractPayloadId(Object payload) {
+    public static Object extractPayloadId(Object payload) {
         if (payload == null) return null;
+        Class<?> resourceLocClass = ResourceLocReflector.classOrNull();
         Class<?> cls = payload.getClass();
         for (Method m : cls.getMethods()) {
             if (m.getParameterCount() != 0) continue;
-            if (ResourceLocation.class.isAssignableFrom(m.getReturnType())) {
+            Class<?> ret = m.getReturnType();
+            if (resourceLocClass != null && resourceLocClass.isAssignableFrom(ret)) {
                 try {
-                    return (ResourceLocation) m.invoke(payload);
+                    return m.invoke(payload);
+                } catch (Throwable ignored) {}
+            }
+            if (resourceLocClass == null && ret.getName().startsWith("net.minecraft.resources.")) {
+                try {
+                    Object candidate = m.invoke(payload);
+                    if (candidate != null && ResourceLocReflector.isInstance(candidate)) {
+                        return candidate;
+                    }
                 } catch (Throwable ignored) {}
             }
         }
@@ -39,9 +48,20 @@ public final class PacketHelper {
                 Object typeObj = m.invoke(payload);
                 if (typeObj == null) continue;
                 for (Method tm : typeObj.getClass().getMethods()) {
-                    if (tm.getParameterCount() == 0
-                            && ResourceLocation.class.isAssignableFrom(tm.getReturnType())) {
-                        return (ResourceLocation) tm.invoke(typeObj);
+                    if (tm.getParameterCount() != 0) continue;
+                    Class<?> tret = tm.getReturnType();
+                    if (resourceLocClass != null && resourceLocClass.isAssignableFrom(tret)) {
+                        try {
+                            return tm.invoke(typeObj);
+                        } catch (Throwable ignored) {}
+                    }
+                    if (resourceLocClass == null && tret.getName().startsWith("net.minecraft.resources.")) {
+                        try {
+                            Object candidate = tm.invoke(typeObj);
+                            if (candidate != null && ResourceLocReflector.isInstance(candidate)) {
+                                return candidate;
+                            }
+                        } catch (Throwable ignored) {}
                     }
                 }
             } catch (Throwable ignored) {}
@@ -49,7 +69,7 @@ public final class PacketHelper {
         return null;
     }
 
-    public static void sendClientbound(ServerPlayer player, ResourceLocation channel, byte[] data) {
+    public static void sendClientbound(ServerPlayer player, Object channel, byte[] data) {
         try {
             Packet<?> pkt = makePacket(true, channel, data);
             if (pkt != null) player.connection.send(pkt);
@@ -58,7 +78,7 @@ public final class PacketHelper {
         }
     }
 
-    public static void sendServerbound(Connection connection, ResourceLocation channel) {
+    public static void sendServerbound(Connection connection, Object channel) {
         try {
             Packet<?> pkt = makePacket(false, channel, new byte[0]);
             if (pkt != null) connection.send(pkt);
@@ -68,7 +88,7 @@ public final class PacketHelper {
     }
 
     @SuppressWarnings("unchecked")
-    private static Packet<?> makePacket(boolean clientbound, ResourceLocation channel, byte[] data) {
+    private static Packet<?> makePacket(boolean clientbound, Object channel, byte[] data) {
         String newPktClass = clientbound
                 ? "net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket"
                 : "net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket";
@@ -93,6 +113,7 @@ public final class PacketHelper {
                     "net.minecraft.network.protocol.play.ServerboundCustomPayloadPacket",
                     "net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket"};
 
+        Class<?> resourceLocClass = ResourceLocReflector.classOrNull();
         for (String cls : legacyNames) {
             try {
                 Class<?> pktCls = Class.forName(cls);
@@ -101,7 +122,7 @@ public final class PacketHelper {
                     for (Constructor<?> ctor : pktCls.getConstructors()) {
                         Class<?>[] p = ctor.getParameterTypes();
                         if (p.length == 2
-                                && ResourceLocation.class.isAssignableFrom(p[0])
+                                && isResourceLoc(p[0], resourceLocClass)
                                 && FriendlyByteBuf.class.isAssignableFrom(p[1])) {
                             return (Packet<?>) ctor.newInstance(channel, buf);
                         }
@@ -118,11 +139,18 @@ public final class PacketHelper {
         return null;
     }
 
-    private static Object makePayload(Class<?> payloadClass, ResourceLocation channel, byte[] data)
+    private static boolean isResourceLoc(Class<?> candidate, Class<?> resourceLocClass) {
+        if (resourceLocClass != null) return resourceLocClass.isAssignableFrom(candidate);
+        return candidate != null && candidate.getName().startsWith("net.minecraft.resources.")
+                && ResourceLocReflector.isAssignableFrom(candidate);
+    }
+
+    private static Object makePayload(Class<?> payloadClass, Object channel, byte[] data)
             throws Throwable {
         Class<?> typeClass = null;
         for (Class<?> inner : payloadClass.getDeclaredClasses()) {
-            if ("Type".equals(inner.getSimpleName())) {
+            String simpleName = inner.getSimpleName();
+            if ("Type".equals(simpleName) || "Id".equals(simpleName)) {
                 typeClass = inner;
                 break;
             }
@@ -141,17 +169,39 @@ public final class PacketHelper {
 
         final Object typeInstance;
         if (typeMethod != null && typeClass != null) {
-            Constructor<?> typeCtor = typeClass.getDeclaredConstructor(ResourceLocation.class);
-            typeCtor.setAccessible(true);
-            typeInstance = typeCtor.newInstance(channel);
+            Class<?> resourceLocClass = ResourceLocReflector.classOrThrow();
+            Constructor<?> typeCtor = null;
+            for (Constructor<?> c : typeClass.getDeclaredConstructors()) {
+                Class<?>[] p = c.getParameterTypes();
+                if (p.length == 1 && resourceLocClass.isAssignableFrom(p[0])) {
+                    typeCtor = c;
+                    break;
+                }
+            }
+            if (typeCtor == null) {
+                for (Constructor<?> c : typeClass.getDeclaredConstructors()) {
+                    Class<?>[] p = c.getParameterTypes();
+                    if (p.length == 1 && p[0].isInstance(channel)) {
+                        typeCtor = c;
+                        break;
+                    }
+                }
+            }
+            if (typeCtor != null) {
+                typeCtor.setAccessible(true);
+                typeInstance = typeCtor.newInstance(channel);
+            } else {
+                typeInstance = null;
+            }
         } else {
             typeInstance = null;
         }
 
         final Method   finalTypeMethod = typeMethod;
         final Class<?> finalTypeClass = typeClass;
-        final ResourceLocation finalChannel = channel;
+        final Object   finalChannel = channel;
         final byte[]   finalData = data;
+        final Class<?> resourceLocClass = ResourceLocReflector.classOrNull();
 
         InvocationHandler handler = (proxy, method, args) -> {
             Class<?> ret = method.getReturnType();
@@ -162,8 +212,12 @@ public final class PacketHelper {
             if (finalTypeClass != null && finalTypeClass.isAssignableFrom(ret) && params.length == 0)
                 return typeInstance;
 
-            if (ResourceLocation.class.isAssignableFrom(ret) && params.length == 0)
+            if (resourceLocClass != null && resourceLocClass.isAssignableFrom(ret) && params.length == 0)
                 return finalChannel;
+
+            if (resourceLocClass == null && ret.getName().startsWith("net.minecraft.resources.") && params.length == 0) {
+                return finalChannel;
+            }
 
             if (ret == void.class && params.length == 1 && FriendlyByteBuf.class.isAssignableFrom(params[0])) {
                 if (finalData.length > 0 && args != null && args.length > 0)

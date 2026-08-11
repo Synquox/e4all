@@ -30,7 +30,7 @@ public class Config extends ReflectiveConfig {
     public final TrackedValue<Boolean> dialtoneSanitizeTicket = this.value(true);
 
     @Comment("Whether to enable offline mode (disables Microsoft authentication for ALL LAN connections, including both tunneled and direct). Toggle via the 'Online Mode' button on the Open to LAN screen.")
-    public final TrackedValue<Boolean> offlineMode = this.value(true);
+    public final TrackedValue<Boolean> offlineMode = this.value(false);
     @Comment("Whether the offline mode warning has already been shown to the user")
     public final TrackedValue<Boolean> offlineWarningShown = this.value(false);
 

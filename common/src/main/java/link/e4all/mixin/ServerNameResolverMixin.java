@@ -37,7 +37,7 @@ public class ServerNameResolverMixin {
             environment.put("java.naming.factory.initial", "com.sun.jndi.dns.DnsContextFactory");
             environment.put("java.naming.provider.url", "dns:");
             environment.put("com.sun.jndi.dns.timeout.retries", "1");
-            environment.put("com.sun.jndi.dns.timeout.initial", "5000");
+            environment.put("com.sun.jndi.dns.timeout.initial", "2000");
             dirContext = new InitialDirContext(environment);
             return serverAddress -> {
                 var inner = innerHandler.lookupRedirect(serverAddress);

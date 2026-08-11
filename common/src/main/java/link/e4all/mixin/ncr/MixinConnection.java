@@ -26,19 +26,19 @@ public abstract class MixinConnection {
 
     // Re-entry guard to prevent infinite recursion when we call send() with the converted packet
     @Unique
-    private static final ThreadLocal<Boolean> e4all$converting = ThreadLocal.withInitial(() -> false);
+    private boolean e4all$converting = false;
 
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSend(Packet<?> packet, @Nullable PacketSendListener packetSendListener, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
-        if (!e4all$converting.get() && packet instanceof ClientboundPlayerChatPacket chat) {
+        if (!e4all$converting && packet instanceof ClientboundPlayerChatPacket chat) {
             info.cancel();
             Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
-            e4all$converting.set(true);
+            e4all$converting = true;
             try {
                 ((Connection) (Object) this).send(systemPacket, packetSendListener);
             } finally {
-                e4all$converting.remove();
+                e4all$converting = false;
             }
         }
     }
@@ -46,14 +46,14 @@ public abstract class MixinConnection {
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;Z)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSend3(Packet<?> packet, @Nullable PacketSendListener packetSendListener, boolean flush, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
-        if (!e4all$converting.get() && packet instanceof ClientboundPlayerChatPacket chat) {
+        if (!e4all$converting && packet instanceof ClientboundPlayerChatPacket chat) {
             info.cancel();
             Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
-            e4all$converting.set(true);
+            e4all$converting = true;
             try {
                 ((Connection) (Object) this).send(systemPacket, packetSendListener, flush);
             } finally {
-                e4all$converting.remove();
+                e4all$converting = false;
             }
         }
     }

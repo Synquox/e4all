@@ -89,10 +89,14 @@ public class E4allClient {
 
     public static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         if (Config.INSTANCE.restoreDedicatedCommands.value() && Agnos.isClient()) {
-            BanListCommands.register(dispatcher);
-            BanPlayerCommands.register(dispatcher);
-            PardonCommand.register(dispatcher);
-            WhitelistCommand.register(dispatcher);
+            try {
+                BanListCommands.register(dispatcher);
+                BanPlayerCommands.register(dispatcher);
+                PardonCommand.register(dispatcher);
+                WhitelistCommand.register(dispatcher);
+            } catch (Throwable t) {
+                LOGGER.warn("e4all: could not register restored dedicated-server commands on this MC version", t);
+            }
         }
         dispatcher.register(
                 Commands.literal("e4all")
@@ -128,10 +132,11 @@ public class E4allClient {
                         .then(Commands.literal("doctor").requires(E4allClient::canManage).executes(ctx -> {
                             var thread = new Thread(() -> {
                                 LOGGER.info("generating e4all doctor report");
-                                Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4all_minecraft.doctor.start"));
+                                var server = ctx.getSource().getServer();
+                                server.execute(() -> Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4all_minecraft.doctor.start")));
                                 var diag = Doctor.doctor();
                                 LOGGER.info("e4all doctor report:\n{}", diag);
-                                Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal(diag));
+                                server.execute(() -> Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal(diag)));
                             }, "e4all_minecraft-doctor");
                             thread.setDaemon(true);
                             thread.start();
@@ -143,7 +148,7 @@ public class E4allClient {
                                     var rawHandler = E4allClient.session.handler;
                                     var group = E4allClient.session.group;
                                     if (E4allClient.session.state != QuiclimeSession.State.STOPPED) {
-                                        E4allClient.session.stop();
+                                        E4allClient.session.stopSync();
                                     }
                                     E4allClient.session = new QuiclimeSession(rawHandler, group);
                                     E4allClient.session.startAsync();

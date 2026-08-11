@@ -1,7 +1,6 @@
 package link.e4all;
 
 import net.minecraft.network.Connection;
-import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,12 +11,18 @@ public final class OpSessionClient {
 
     private OpSessionClient() {}
 
+    public static void clear() {
+        secrets.clear();
+        connection = null;
+    }
+
     public static void announce(Connection activeConnection) {
+        clear();
         connection = activeConnection;
         OpSessionPayload.announceClient(activeConnection);
     }
 
-    public static void handlePayload(ResourceLocation id) {
+    public static void handlePayload(Object id) {
         String[] secret = OpSessionPayload.parseSecret(id);
         if (secret != null) {
             secrets.put(secret[0], secret[1]);

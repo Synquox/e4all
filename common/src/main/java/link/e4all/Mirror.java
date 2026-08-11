@@ -81,12 +81,15 @@ public class Mirror {
     private static final String[] NAME_AND_ID_METHOD_NAMES = {
             "nameAndId",
             "method_72498",
-            "getPlayerConfigEntry"
+            "getPlayerConfigEntry",
+            "method_73606"
     };
     private static final String[] IS_SINGLEPLAYER_OWNER_METHOD_NAMES = {
             "isSingleplayerOwner",
             "method_19466",
-            "m_7779_"
+            "m_7779_",
+            "method_73608",
+            "isOwner"
     };
     private static final String[] SET_USING_WHITELIST_METHOD_NAMES = {
             "setUsingWhiteList",
@@ -229,13 +232,13 @@ public class Mirror {
                 method.invoke(source, (Supplier<Component>) () -> message, true);
                 return;
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
-            // Fallback: 1-arg signature (e.g. sendFailure(Component) has no boolean param)
             try {
                 Method method = clazz.getMethod(methodName, Component.class);
                 method.invoke(source, message);
                 return;
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
         }
+        E4allClient.LOGGER.warn("Could not send message to command source via any known method mapping: {}", message);
     }
 
     public static boolean isSingleplayerOwner(MinecraftServer server, ServerPlayer player) {
@@ -244,7 +247,10 @@ public class Mirror {
         for (String methodName : NAME_AND_ID_METHOD_NAMES) {
             try {
                 Method method = clazz.getMethod(methodName);
-                profile = method.invoke(player);
+                Object candidate = method.invoke(player);
+                if (candidate instanceof com.mojang.authlib.GameProfile) {
+                    profile = candidate;
+                }
                 break;
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
         }
@@ -254,6 +260,22 @@ public class Mirror {
                 Method method = clazz2.getMethod(methodName, profile.getClass());
                 return (boolean) method.invoke(server, profile);
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
+        }
+        if (profile instanceof com.mojang.authlib.GameProfile gp) {
+            for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+                for (Method method : clazz2.getMethods()) {
+                    if (!method.getName().equals(methodName)) continue;
+                    if (method.getParameterCount() != 1) continue;
+                    if (method.getReturnType() != boolean.class) continue;
+                    Class<?> paramType = method.getParameterTypes()[0];
+                    Object adapted = adaptProfile(gp, paramType);
+                    if (adapted != null) {
+                        try {
+                            return (boolean) method.invoke(server, adapted);
+                        } catch (IllegalAccessException | InvocationTargetException ignored) {}
+                    }
+                }
+            }
         }
         return false;
     }

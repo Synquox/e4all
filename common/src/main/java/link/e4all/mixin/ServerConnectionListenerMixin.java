@@ -50,6 +50,16 @@ public abstract class ServerConnectionListenerMixin {
             return;
         }
 
+        if (link.e4all.AndroidDetector.isAndroid()) {
+            link.e4all.E4allClient.LOGGER.warn("e4all: Android environment detected. QUIC tunnel hosting is not supported on Android (native libraries require glibc, Android uses bionic libc). Detection: {}", link.e4all.AndroidDetector.detect().reason());
+            if (link.e4all.Agnos.isClient()) {
+                link.e4all.Mirror.addMessage(link.e4all.Mirror.translatable("text.e4all_minecraft.error.androidUnsupported"));
+            }
+            e4mc$childHandler = null;
+            e4mc$group = null;
+            return;
+        }
+
         if (Config.INSTANCE.hostEnabled.value()) {
             synchronized (E4allClient.SESSION_LOCK) {
                 QuiclimeSession existing = E4allClient.session;

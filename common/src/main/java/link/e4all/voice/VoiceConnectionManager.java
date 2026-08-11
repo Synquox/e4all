@@ -5,6 +5,7 @@ import io.netty.channel.Channel;
 import io.netty.util.ReferenceCountUtil;
 import link.e4all.E4allClient;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,16 +37,12 @@ public final class VoiceConnectionManager {
             ByteBuf buf = channel.alloc().buffer(1 + data.length);
             buf.writeByte(VoiceFraming.MSG_VOICE_DATA);
             buf.writeBytes(data);
-            channel.writeAndFlush(buf).addListener(future -> {
-                if (!future.isSuccess()) {
-                    ReferenceCountUtil.safeRelease(buf);
-                }
-            });
+            channel.writeAndFlush(buf);
         }
     }
 
     public void closeAll() {
-        Map<UUID, Channel> snapshot = new ConcurrentHashMap<>(streams);
+        Map<UUID, Channel> snapshot = new HashMap<>(streams);
         streams.clear();
         for (Channel ch : snapshot.values()) {
             try {

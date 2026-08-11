@@ -2,6 +2,7 @@ package link.e4all.dialtone;
 
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
+import link.e4all.AndroidDetector;
 import link.e4all.E4allClient;
 import link.e4all.QuiclimeSession;
 import link.e4mc.iroh.Endpoint;
@@ -27,6 +28,10 @@ public class DialtoneAmbientSession {
     }
 
     public synchronized void start() throws Exception {
+        if (AndroidDetector.isAndroid()) {
+            E4allClient.LOGGER.warn("e4all: Dialtone (iroh) is not supported on Android — native library requires glibc, Android uses bionic libc.");
+            throw new UnsupportedOperationException("Dialtone is not supported on Android (bionic libc)");
+        }
         if (endpoint != null || dispatcher != null) {
             E4allClient.LOGGER.info("Cleaning up stale DialtoneAmbientSession before restart");
             stop();

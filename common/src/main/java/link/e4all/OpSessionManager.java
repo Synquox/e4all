@@ -28,24 +28,22 @@ public final class OpSessionManager {
     private static final Set<UUID> capableClients = ConcurrentHashMap.newKeySet();
     private static volatile MinecraftServer activeServer;
     private static volatile String sessionToken;
-    private static volatile boolean protectOfflineOps;
 
     private OpSessionManager() {}
 
     public static void beginSession(MinecraftServer server) {
         activeServer = server;
         sessionToken = newToken();
-        protectOfflineOps = Config.INSTANCE.offlineMode.value();
         secrets.clear();
         pending.clear();
         denied.clear();
+        capableClients.clear();
     }
 
     public static void endSession(MinecraftServer server) {
         if (activeServer == server) {
             activeServer = null;
             sessionToken = null;
-            protectOfflineOps = false;
             secrets.clear();
             pending.clear();
             denied.clear();
@@ -58,7 +56,7 @@ public final class OpSessionManager {
     }
 
     public static Boolean getOpOverride(MinecraftServer server, GameProfile profile) {
-        if (!isLanSession(server)) {
+        if (!isManaged(server)) {
             return null;
         }
         if (suppressesOp(server, profile)) {
@@ -104,6 +102,9 @@ public final class OpSessionManager {
         if (!isManaged(server) || server.getPlayerList().getOps().get(player.getGameProfile()) == null) {
             return;
         }
+        if (Mirror.isSingleplayerOwner(server, player)) {
+            return;
+        }
 
         UUID playerId = player.getUUID();
         denied.remove(playerId);
@@ -127,7 +128,7 @@ public final class OpSessionManager {
         capableClients.remove(playerId);
     }
 
-    public static void handleClientPayload(GameProfile profile, net.minecraft.resources.ResourceLocation id) {
+    public static void handleClientPayload(GameProfile profile, Object id) {
         if (OpSessionPayload.isClientHello(id)) {
             capableClients.add(profile.getId());
             MinecraftServer server = activeServer;
@@ -276,7 +277,7 @@ public final class OpSessionManager {
     }
 
     private static boolean isManaged(MinecraftServer server) {
-        return isLanSession(server) && protectOfflineOps;
+        return isLanSession(server) && Config.INSTANCE.offlineMode.value();
     }
 
     private static boolean isLanSession(MinecraftServer server) {

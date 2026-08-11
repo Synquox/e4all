@@ -30,6 +30,31 @@ public class Doctor {
             result.append(baos.toString(StandardCharsets.UTF_8));
         }
         result.append("\n");
+        result.append("platform info:\n");
+        result.append("  os.name: ").append(System.getProperty("os.name", "unknown")).append("\n");
+        result.append("  os.arch: ").append(System.getProperty("os.arch", "unknown")).append("\n");
+        result.append("  java.vm.name: ").append(System.getProperty("java.vm.name", "unknown")).append("\n");
+        result.append("  java.runtime.name: ").append(System.getProperty("java.runtime.name", "unknown")).append("\n");
+        result.append("  user.home: ").append(System.getProperty("user.home", "unknown")).append("\n");
+        var androidResult = AndroidDetector.detect();
+        result.append("  android detected: ").append(androidResult.isAndroid()).append("\n");
+        result.append("  android detection reason: ").append(androidResult.reason()).append("\n");
+        String nativePath = System.getProperty("link.e4mc.native_path");
+        if (nativePath != null) {
+            result.append("  link.e4mc.native_path: ").append(nativePath).append("\n");
+        }
+        String nativeUrl = System.getProperty("link.e4mc.native_url");
+        if (nativeUrl != null) {
+            result.append("  link.e4mc.native_url: ").append(nativeUrl).append("\n");
+        }
+        String dialtoneNativePath = System.getProperty("link.e4mc.dialtone.native_path");
+        if (dialtoneNativePath != null) {
+            result.append("  link.e4mc.dialtone.native_path: ").append(dialtoneNativePath).append("\n");
+        }
+        String dialtoneNativeUrl = System.getProperty("link.e4mc.dialtone.native_url");
+        if (dialtoneNativeUrl != null) {
+            result.append("  link.e4mc.dialtone.native_url: ").append(dialtoneNativeUrl).append("\n");
+        }
         result.append("QuiclimeSession state: ");
         var session = E4allClient.session;
         if (session != null) {

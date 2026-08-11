@@ -23,7 +23,7 @@ public abstract class ShareToLanScreenMixin extends Screen {
     protected ShareToLanScreenMixin(Component component) {
         super(component);
     }
-    @Inject(method = "/^(init|method_25426|m_7856_)$/", at = @At("TAIL"), require = 0)
+    @Inject(method = "/^(init|method_25426|m_7856_|initLayout|m_280264_|method_48413)$/", at = @At("TAIL"), require = 0)
     private void e4all$addOfflineModeButton(CallbackInfo ci) {
         E4allClient.LOGGER.warn("[e4all] ShareToLanScreen.init() TAIL reached — injecting Online Mode toggle button");
         try {

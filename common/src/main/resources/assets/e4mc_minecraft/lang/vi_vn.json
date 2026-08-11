@@ -40,5 +40,7 @@
     "text.e4all_minecraft.reason.didNotVerifyOpInTime": "không xác minh phiên OP trước đó của họ kịp thời",
     "text.e4all_minecraft.action.kick": "Đá",
     "text.e4all_minecraft.action.allowWithoutOp": "Cho phép không có OP",
-    "text.e4all_minecraft.action.restoreOp": "Khôi phục OP"
+    "text.e4all_minecraft.action.restoreOp": "Khôi phục OP",
+    "text.e4all_minecraft.error.androidUnsupported": "e4all: Hosting is not supported on Android. The QUIC tunnel requires native libraries built for desktop Linux/Windows/macOS.",
+    "text.e4all_minecraft.error.nativeLoadFailed": "e4all: Failed to load native library. This platform may not be supported. Run /e4all doctor for details."
 }

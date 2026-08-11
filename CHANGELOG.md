@@ -6,6 +6,7 @@
  * Ported changes from upstream e4mc 6.1.1 through 6.2.1
  * Updated Gradle (8.14.4 → 9.6.1), Shadow plugin (8.3.6 → 9.6.1), and mod-publish-plugin (1.1.0 → 2.1.1)
  * Fixed Dialtone connection issues in Minecraft 1.19 by removing stale address caching (upstream 6.2.1 fix)
+ * Also fixed some bugs in the mod
 
 ### 2.0.0-beta
 
@@ -15,9 +16,9 @@
    * Hosts can manage other players using standard /op and /deop commands.
    * Offline/Cracked Mode Verification: OPs are assigned a secret key to authenticate upon rejoining and prevent impersonation.
    * If a key is lost, the host can choose to:
-     1.*Kick the player
-     2.*Keep OP rights
-     3. **Revoke OP rights
+     1. *Kick the player*
+     2. *Keep OP rights*
+     3. *Revoke OP rights*
 ###  Fixes
  * SVC (Simple Voice Chat): Ongoing bug fixes (WIP).
  * Xaero's Mods: Fixed compatibility issues with Xaero's Minimap and WorldMap (WIP).

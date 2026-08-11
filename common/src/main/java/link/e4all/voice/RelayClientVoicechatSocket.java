@@ -19,6 +19,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     private static final RawUdpPacket POISON_PILL = new RawUdpPacketImpl(new byte[0], 0, new InetSocketAddress(0));
@@ -35,21 +36,20 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     private volatile boolean closed = false;
     private volatile boolean useDialtone = false;
 
-    private static volatile String pendingDialtoneTicket = null;
+    private static final AtomicReference<String> pendingDialtoneTicket = new AtomicReference<>(null);
 
     public static void setPendingDialtoneTicket(String ticket) {
-        pendingDialtoneTicket = ticket;
+        pendingDialtoneTicket.set(ticket);
     }
 
     public static boolean shouldUseCustomSocket() {
-        if (pendingDialtoneTicket != null) return true;
+        if (pendingDialtoneTicket.get() != null) return true;
         return false;
     }
 
     @Override
     public void open() throws Exception {
-        String ticket = pendingDialtoneTicket;
-        pendingDialtoneTicket = null;
+        String ticket = pendingDialtoneTicket.getAndSet(null);
         if (ticket != null) {
             useDialtone = true;
             openDialtone(ticket);
@@ -204,7 +204,7 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
         }
         if (udpReaderThread != null) udpReaderThread.interrupt();
 
-        pendingDialtoneTicket = null;
+        pendingDialtoneTicket.set(null);
     }
 
     @Override

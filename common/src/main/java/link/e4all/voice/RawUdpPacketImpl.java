@@ -9,7 +9,7 @@ public final class RawUdpPacketImpl implements RawUdpPacket {
     private final SocketAddress address;
 
     public RawUdpPacketImpl(byte[] data, long timestamp, SocketAddress address) {
-        this.data = data.clone();
+        this.data = data;
         this.timestamp = timestamp;
         this.address = address;
     }

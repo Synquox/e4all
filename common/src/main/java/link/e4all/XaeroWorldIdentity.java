@@ -1,8 +1,6 @@
 package link.e4all;
 
-import link.e4all.dialtone.DialtoneAddress;
 import net.minecraft.network.Connection;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -19,16 +17,28 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class XaeroWorldIdentity {
     private static final String ID_FILE_NAME = "e4all-xaero-world-id.txt";
-    private static final ResourceLocation XAERO_MINIMAP = OpSessionPayload.resourceLocation("xaerominimap", "main");
-    private static final ResourceLocation XAERO_WORLDMAP = OpSessionPayload.resourceLocation("xaeroworldmap", "main");
+    private static volatile Object xaeroMinimap;
+    private static volatile Object xaeroWorldmap;
     private static final ConcurrentHashMap<Path, Integer> WORLD_IDS = new ConcurrentHashMap<>();
     private static final Logger LOGGER = LoggerFactory.getLogger("e4all");
 
     private XaeroWorldIdentity() {
     }
 
-    public static boolean isRelayConnection(Connection connection) {
-        return connection.getRemoteAddress() instanceof DialtoneAddress;
+    private static Object xaeroMinimap() {
+        Object cached = xaeroMinimap;
+        if (cached != null) return cached;
+        cached = OpSessionPayload.resourceLocation("xaerominimap", "main");
+        xaeroMinimap = cached;
+        return cached;
+    }
+
+    private static Object xaeroWorldmap() {
+        Object cached = xaeroWorldmap;
+        if (cached != null) return cached;
+        cached = OpSessionPayload.resourceLocation("xaeroworldmap", "main");
+        xaeroWorldmap = cached;
+        return cached;
     }
 
     public static void initializeForRelay(MinecraftServer server) {
@@ -36,14 +46,15 @@ public final class XaeroWorldIdentity {
     }
 
     public static void sendToRelayPlayer(MinecraftServer server, Connection connection, ServerPlayer player) {
-        if (!isRelayConnection(connection)) {
+        QuiclimeSession session = E4allClient.session;
+        if (session == null || session.state != QuiclimeSession.State.STARTED) {
             return;
         }
 
         int worldId = getOrCreateWorldId(server);
         byte[] data = makeXaeroData(worldId);
-        PacketHelper.sendClientbound(player, XAERO_MINIMAP, data);
-        PacketHelper.sendClientbound(player, XAERO_WORLDMAP, data);
+        PacketHelper.sendClientbound(player, xaeroMinimap(), data);
+        PacketHelper.sendClientbound(player, xaeroWorldmap(), data);
     }
 
     private static byte[] makeXaeroData(int worldId) {
@@ -72,19 +83,55 @@ public final class XaeroWorldIdentity {
             }
 
             int worldId = newWorldId();
-            Files.writeString(
-                    path,
-                    Integer.toString(worldId) + System.lineSeparator(),
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-            );
-            LOGGER.info("Stored Xaero world identity at {}", path);
+            try {
+                Files.writeString(
+                        path,
+                        Integer.toString(worldId) + System.lineSeparator(),
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.TRUNCATE_EXISTING
+                );
+                LOGGER.info("Stored Xaero world identity at {}", path);
+            } catch (IOException writeEx) {
+                Path fallbackPath = fallbackPathFor(path);
+                if (fallbackPath != null) {
+                    try {
+                        if (Files.exists(fallbackPath)) {
+                            try {
+                                return parseWorldId(fallbackPath);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                        Files.writeString(
+                                fallbackPath,
+                                Integer.toString(worldId) + System.lineSeparator(),
+                                StandardCharsets.UTF_8,
+                                StandardOpenOption.CREATE,
+                                StandardOpenOption.TRUNCATE_EXISTING
+                        );
+                        LOGGER.warn("Could not persist Xaero world identity at {}; saved fallback at {}", path, fallbackPath, writeEx);
+                    } catch (IOException fallbackWriteEx) {
+                        LOGGER.warn("Could not persist Xaero world identity at {} or fallback {}", path, fallbackPath, fallbackWriteEx);
+                    }
+                } else {
+                    LOGGER.warn("Could not persist Xaero world identity at {}; using a temporary id for this server run", path, writeEx);
+                }
+            }
             return worldId;
-        } catch (IOException e) {
+        } catch (Throwable t) {
             int fallbackId = newWorldId();
-            LOGGER.warn("Could not persist Xaero world identity at {}; using a temporary id for this server run", path, e);
+            LOGGER.warn("Could not persist Xaero world identity at {}; using a temporary id for this server run", path, t);
             return fallbackId;
+        }
+    }
+
+    private static Path fallbackPathFor(Path worldPath) {
+        try {
+            String safeName = Integer.toHexString(worldPath.hashCode()) + "-" + Integer.toHexString(worldPath.toString().hashCode()) + ".txt";
+            Path dir = Agnos.configDir().resolve("e4all-xaero-world-ids");
+            Files.createDirectories(dir);
+            return dir.resolve(safeName);
+        } catch (Throwable t) {
+            return null;
         }
     }
 
