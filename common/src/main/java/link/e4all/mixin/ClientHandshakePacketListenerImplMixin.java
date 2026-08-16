@@ -41,7 +41,12 @@ public class ClientHandshakePacketListenerImplMixin {
 
     @Inject(method = "handleGameProfile", at = @At("TAIL"), require = 0)
     private void e4all$announceOpSessionClient(CallbackInfo ci) {
-        link.e4all.OpSessionClient.announce(connection);
+        try {
+            Class.forName("net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket");
+            link.e4all.OpSessionClient.announce(connection);
+        } catch (ClassNotFoundException ignored) {
+            // pre-1.20.2 doesnt support config custom payloads
+        }
     }
 }
 

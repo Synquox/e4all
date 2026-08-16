@@ -24,7 +24,12 @@ public final class OpSessionPayload {
     }
 
     public static void announceClient(Connection connection) {
-        PacketHelper.sendServerbound(connection, clientHello());
+        try {
+            Class.forName("net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket");
+            PacketHelper.sendServerbound(connection, clientHello());
+        } catch (ClassNotFoundException ignored) {
+            // pre-1.20.2 doesnt support config custom payloads
+        }
     }
 
     static Object resourceLocation(String namespace, String path) {

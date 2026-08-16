@@ -4,7 +4,6 @@ import link.e4all.E4allClient;
 import link.e4all.Mirror;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.ShareToLanScreen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -18,14 +17,14 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.List;
-@Mixin(ShareToLanScreen.class)
-public abstract class ShareToLanScreenMixin extends Screen {
-    protected ShareToLanScreenMixin(Component component) {
+@Mixin(targets = "net.minecraft.client.gui.screens.MultiplayerOptionsScreen")
+public abstract class MultiplayerOptionsScreenMixin extends Screen {
+    protected MultiplayerOptionsScreenMixin(Component component) {
         super(component);
     }
     @Inject(method = "/^(init|method_25426|m_7856_|initLayout|m_280264_|method_48413)$/", at = @At("TAIL"), require = 0)
     private void e4all$addOfflineModeButton(CallbackInfo ci) {
-        E4allClient.LOGGER.warn("[e4all] ShareToLanScreen.init() TAIL reached: injecting Online Mode toggle button");
+        E4allClient.LOGGER.warn("[e4all] MultiplayerOptionsScreen.init() TAIL reached: injecting Online Mode toggle button");
         try {
             boolean currentValue = Config.INSTANCE.offlineMode.value();
             Component buttonText = e4all$getButtonText(currentValue);

@@ -10,7 +10,23 @@ public final class ResourceLocReflector {
 
     private static final String[] CANDIDATE_FQNS = {
             "net.minecraft.resources.ResourceLocation",
-            "net.minecraft.resources.Identifier"
+            "net.minecraft.resources.Identifier",
+            "net.minecraft.class_2960"
+    };
+
+    private static final String[] FACTORY_NAMES = {
+            "fromNamespaceAndPath",
+            "method_60654"
+    };
+
+    private static final String[] NAMESPACE_NAMES = {
+            "getNamespace",
+            "method_12836"
+    };
+
+    private static final String[] PATH_NAMES = {
+            "getPath",
+            "method_12832"
     };
 
     private static volatile Class<?> cachedClass;
@@ -79,9 +95,12 @@ public final class ResourceLocReflector {
         if (factory == null) {
             synchronized (LOCK) {
                 if (cachedFactory == null) {
-                    try {
-                        cachedFactory = cls.getMethod("fromNamespaceAndPath", String.class, String.class);
-                    } catch (NoSuchMethodException ignoredFactory) {
+                    for (String name : FACTORY_NAMES) {
+                        try {
+                            cachedFactory = cls.getMethod(name, String.class, String.class);
+                            break;
+                        } catch (NoSuchMethodException ignored) {
+                        }
                     }
                 }
                 factory = cachedFactory;
@@ -123,25 +142,28 @@ public final class ResourceLocReflector {
 
     public static String getNamespace(Object id) {
         if (id == null) return null;
-        return invokeStringGetter(id, "getNamespace");
+        return invokeStringGetter(id, NAMESPACE_NAMES);
     }
 
     public static String getPath(Object id) {
         if (id == null) return null;
-        return invokeStringGetter(id, "getPath");
+        return invokeStringGetter(id, PATH_NAMES);
     }
 
-    private static String invokeStringGetter(Object id, String methodName) {
-        try {
-            Method m = id.getClass().getMethod(methodName);
-            return (String) m.invoke(id);
-        } catch (NoSuchMethodException | IllegalAccessException e) {
-            return null;
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
-            return null;
+    private static String invokeStringGetter(Object id, String[] methodNames) {
+        for (String methodName : methodNames) {
+            try {
+                Method m = id.getClass().getMethod(methodName);
+                return (String) m.invoke(id);
+            } catch (NoSuchMethodException | IllegalAccessException e) {
+                continue;
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+                return null;
+            }
         }
+        return null;
     }
 
     public static boolean isInstance(Object candidate) {

@@ -5,12 +5,9 @@ import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.Mirror;
 import link.e4all.OpSessionManager;
-import link.e4all.XaeroWorldIdentity;
-import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.server.players.UserBanList;
 import net.minecraft.server.players.UserWhiteList;
@@ -64,24 +61,6 @@ public abstract class PlayerListMixin {
                 cir.setReturnValue(null);
             }
         } catch (RuntimeException ignored) {}
-    }
-
-    @Inject(method = "placeNewPlayer", at = @At("HEAD"), require = 0)
-    private void e4all$startOpVerification(Connection connection, ServerPlayer player, CommonListenerCookie cookie, CallbackInfo ci) {
-        OpSessionManager.onPlayerConnecting(getServer(), player);
-    }
-
-    @Inject(
-            method = "placeNewPlayer",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V",
-                    ordinal = 0
-            ),
-            require = 0
-    )
-    private void e4all$sendXaeroWorldIdentityBeforeJoin(Connection connection, ServerPlayer player, CommonListenerCookie cookie, CallbackInfo ci) {
-        XaeroWorldIdentity.sendToRelayPlayer(getServer(), connection, player);
     }
 
     @Inject(method = "remove", at = @At("TAIL"), require = 0)

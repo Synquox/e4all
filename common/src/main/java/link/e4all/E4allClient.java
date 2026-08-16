@@ -29,10 +29,12 @@ public class E4allClient {
             return source.hasPermission(4);
         }
         try {
-            return Mirror.isSingleplayerOwner(source.getServer(), source.getPlayerOrException());
-        } catch (CommandSyntaxException e) {
-            return false;
+            if (Mirror.isSingleplayerOwner(source.getServer(), source.getPlayerOrException())) {
+                return true;
+            }
+        } catch (Throwable ignored) {
         }
+        return source.hasPermission(2);
     }
 
     private static boolean isPlayerSource(CommandSourceStack source) {

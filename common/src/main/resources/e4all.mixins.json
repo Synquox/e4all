@@ -20,7 +20,9 @@
     "ncr.MixinServerboundChatCommandPacket",
     "ncr.MixinServerboundChatPacket",
     "ncr.MixinServerboundChatSessionUpdatePacket",
-    "PlayerListMixin"
+    "PlayerListMixin",
+    "PlayerListLegacyMixin",
+    "PlayerListCookieMixin"
   ],
   "injectors": {
     "defaultRequire": 0
@@ -29,6 +31,7 @@
     "ClientCommonPacketListenerImplMixin",
     "ClientHandshakePacketListenerImplMixin",
     "IntegratedServerMixin",
+    "MultiplayerOptionsScreenMixin",
     "ServerAddressMixin",
     "ServerNameResolverMixin",
     "ShareToLanScreenMixin"

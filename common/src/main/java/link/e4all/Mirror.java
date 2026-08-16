@@ -91,6 +91,20 @@ public class Mirror {
             "method_73608",
             "isOwner"
     };
+    private static final String[] PLAYER_IS_SINGLEPLAYER_OWNER_METHOD_NAMES = {
+            "isSingleplayerOwner",
+            "method_52402",
+            "m_52402_",
+            "isOwner"
+    };
+    private static final String[] GET_SINGLEPLAYER_NAME_METHOD_NAMES = {
+            "getSingleplayerName",
+            "getSinglePlayerName",
+            "method_3823",
+            "m_129792_",
+            "getHostProfile",
+            "getSingleplayerProfile"
+    };
     private static final String[] SET_USING_WHITELIST_METHOD_NAMES = {
             "setUsingWhiteList",
             "m_6628_",
@@ -242,64 +256,124 @@ public class Mirror {
     }
 
     public static boolean isSingleplayerOwner(MinecraftServer server, ServerPlayer player) {
-        Class<ServerPlayer> clazz = ServerPlayer.class;
-        Object profile = player.getGameProfile();
+        if (server == null || player == null) return false;
+        for (String name : PLAYER_IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+            try {
+                Method m = player.getClass().getMethod(name);
+                if (m.getParameterCount() == 0 && m.getReturnType() == boolean.class) {
+                    return (boolean) m.invoke(player);
+                }
+            } catch (Throwable ignored) {}
+        }
+        Object profile = null;
+        try {
+            profile = player.getGameProfile();
+        } catch (Throwable ignored) {}
+        Object nameAndId = null;
         for (String methodName : NAME_AND_ID_METHOD_NAMES) {
             try {
-                Method method = clazz.getMethod(methodName);
+                Method method = player.getClass().getMethod(methodName);
                 Object candidate = method.invoke(player);
                 if (candidate instanceof com.mojang.authlib.GameProfile) {
                     profile = candidate;
+                } else if (candidate != null) {
+                    nameAndId = candidate;
                 }
                 break;
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
+            } catch (Throwable ignored) {}
         }
-        Class<MinecraftServer> clazz2 = MinecraftServer.class;
-        for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
-            try {
-                Method method = clazz2.getMethod(methodName, profile.getClass());
-                return (boolean) method.invoke(server, profile);
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
-        }
-        if (profile instanceof com.mojang.authlib.GameProfile gp) {
-            for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
-                for (Method method : clazz2.getMethods()) {
-                    if (!method.getName().equals(methodName)) continue;
-                    if (method.getParameterCount() != 1) continue;
-                    if (method.getReturnType() != boolean.class) continue;
-                    Class<?> paramType = method.getParameterTypes()[0];
+        Class<?>[] serverClasses = new Class<?>[]{server.getClass(), MinecraftServer.class};
+        for (Class<?> sc : serverClasses) {
+            for (Method m : sc.getMethods()) {
+                if (m.getParameterCount() != 1 || m.getReturnType() != boolean.class) continue;
+                boolean nameMatch = false;
+                for (String name : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+                    if (m.getName().equals(name)) {
+                        nameMatch = true;
+                        break;
+                    }
+                }
+                if (!nameMatch) continue;
+                Class<?> paramType = m.getParameterTypes()[0];
+                if (nameAndId != null && paramType.isInstance(nameAndId)) {
+                    try { return (boolean) m.invoke(server, nameAndId); } catch (Throwable ignored) {}
+                }
+                if (profile != null && paramType.isInstance(profile)) {
+                    try { return (boolean) m.invoke(server, profile); } catch (Throwable ignored) {}
+                }
+                if (paramType.isInstance(player)) {
+                    try { return (boolean) m.invoke(server, player); } catch (Throwable ignored) {}
+                }
+                if (profile instanceof com.mojang.authlib.GameProfile gp) {
                     Object adapted = adaptProfile(gp, paramType);
                     if (adapted != null) {
-                        try {
-                            return (boolean) method.invoke(server, adapted);
-                        } catch (IllegalAccessException | InvocationTargetException ignored) {}
+                        try { return (boolean) m.invoke(server, adapted); } catch (Throwable ignored) {}
                     }
                 }
             }
         }
+        for (Class<?> sc : serverClasses) {
+            for (String name : GET_SINGLEPLAYER_NAME_METHOD_NAMES) {
+                try {
+                    Method m = sc.getMethod(name);
+                    if (m.getParameterCount() == 0) {
+                        Object res = m.invoke(server);
+                        if (res instanceof String sName && !sName.isEmpty()) {
+                            String pName = null;
+                            try { pName = player.getScoreboardName(); } catch (Throwable ignored) {}
+                            if (pName == null && profile instanceof com.mojang.authlib.GameProfile gp) pName = gp.getName();
+                            if (pName != null && pName.equalsIgnoreCase(sName)) return true;
+                        }
+                        if (res instanceof com.mojang.authlib.GameProfile gp) {
+                            if (profile instanceof com.mojang.authlib.GameProfile pgp && gp.getId() != null && gp.getId().equals(pgp.getId())) return true;
+                        }
+                        if (res instanceof java.util.UUID uuid) {
+                            if (player.getUUID() != null && player.getUUID().equals(uuid)) return true;
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
+        try {
+            if (!server.isDedicatedServer()) {
+                Method isSingle = null;
+                try { isSingle = server.getClass().getMethod("isSingleplayer"); } catch (Throwable ignored) {}
+                if (isSingle == null) {
+                    try { isSingle = server.getClass().getMethod("method_3816"); } catch (Throwable ignored) {}
+                }
+                if (isSingle != null && (boolean) isSingle.invoke(server)) {
+                    return true;
+                }
+                if (server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {}
         return false;
     }
 
     public static boolean isSingleplayerOwnerObj(MinecraftServer server, Object maybeProfile) {
-        Class<MinecraftServer> clazz2 = MinecraftServer.class;
-        for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
-            try {
-                Method method = clazz2.getMethod(methodName, maybeProfile.getClass());
-                return (boolean) method.invoke(server, maybeProfile);
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {}
-        }
-        if (maybeProfile instanceof com.mojang.authlib.GameProfile gp) {
-            for (String methodName : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
-                for (Method method : clazz2.getMethods()) {
-                    if (!method.getName().equals(methodName)) continue;
-                    if (method.getParameterCount() != 1) continue;
-                    if (method.getReturnType() != boolean.class) continue;
-                    Class<?> paramType = method.getParameterTypes()[0];
+        if (server == null || maybeProfile == null) return false;
+        Class<?>[] serverClasses = new Class<?>[]{server.getClass(), MinecraftServer.class};
+        for (Class<?> sc : serverClasses) {
+            for (Method m : sc.getMethods()) {
+                if (m.getParameterCount() != 1 || m.getReturnType() != boolean.class) continue;
+                boolean nameMatch = false;
+                for (String name : IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
+                    if (m.getName().equals(name)) {
+                        nameMatch = true;
+                        break;
+                    }
+                }
+                if (!nameMatch) continue;
+                Class<?> paramType = m.getParameterTypes()[0];
+                if (paramType.isInstance(maybeProfile)) {
+                    try { return (boolean) m.invoke(server, maybeProfile); } catch (Throwable ignored) {}
+                }
+                if (maybeProfile instanceof com.mojang.authlib.GameProfile gp) {
                     Object adapted = adaptProfile(gp, paramType);
                     if (adapted != null) {
-                        try {
-                            return (boolean) method.invoke(server, adapted);
-                        } catch (IllegalAccessException | InvocationTargetException ignored) {}
+                        try { return (boolean) m.invoke(server, adapted); } catch (Throwable ignored) {}
                     }
                 }
             }
@@ -373,7 +447,7 @@ public class Mirror {
             Method builderMethod = null;
             for (Method m : net.minecraft.client.gui.components.Button.class.getMethods()) {
                 if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2) {
-                    if (m.getParameterTypes()[0].equals(Component.class) && m.getParameterTypes()[1].getName().endsWith("OnPress")) {
+                    if (m.getParameterTypes()[0].equals(Component.class) && m.getParameterTypes()[1].isInstance(onPress)) {
                         builderMethod = m;
                         break;
                     }
@@ -382,7 +456,7 @@ public class Mirror {
             if (builderMethod == null) {
                 for (Method m : net.minecraft.client.gui.components.Button.class.getDeclaredMethods()) {
                     if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2) {
-                        if (m.getParameterTypes()[0].equals(Component.class) && m.getParameterTypes()[1].getName().endsWith("OnPress")) {
+                        if (m.getParameterTypes()[0].equals(Component.class) && m.getParameterTypes()[1].isInstance(onPress)) {
                             builderMethod = m;
                             break;
                         }
