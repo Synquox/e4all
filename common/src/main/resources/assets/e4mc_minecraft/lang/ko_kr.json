@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "로컬 게임을 도메인 [%s]에서 호스트합니다",
     "text.e4all_minecraft.closeServer": "로컬 게임이 더이상 공개되지 않습니다",
     "text.e4all_minecraft.serverAlreadyClosed": "로컬 게임이 이미 공개중이 아닙니다",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "문제 해결 정보를 생성하는 중입니다. 잠시만 기다려주세요.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all이 알 수 없는 출처에서 다운로드되었습니다. 이 e4all 복사본은 구버전이거나 수정되었을 수 있습니다.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "오프라인 모드 활성화됨 — 이제 복돌(cracked) 클라이언트가 참여할 수 있습니다",
-    "text.e4all_minecraft.offlineModeDisabled": "오프라인 모드 비활성화됨 — Microsoft 인증이 필요합니다",
+    "text.e4all_minecraft.offlineModeEnabled": "오프라인 모드 활성화됨 - 이제 복돌(cracked) 클라이언트가 참여할 수 있습니다",
+    "text.e4all_minecraft.offlineModeDisabled": "오프라인 모드 비활성화됨 - Microsoft 인증이 필요합니다",
     "text.e4all_minecraft.offlineModeWarning": "⚠ 경고: 오프라인 모드가 활성화되었습니다! 인증이 비활성화되어 누구나 원하는 사용자 이름으로 참여할 수 있습니다. 이 세션 동안에는 이 설정을 되돌릴 수 없습니다.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

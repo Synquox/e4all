@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Local game hosted on domain [%s]",
     "text.e4all_minecraft.closeServer": "Local game no longer publicly hosted",
     "text.e4all_minecraft.serverAlreadyClosed": "Local game not publicly hosted",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Generating troubleshooting information. Please stand by.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all was downloaded from an unknown source. This copy of e4all may be outdated or modified.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Offline mode enabled — cracked clients can now join",
-    "text.e4all_minecraft.offlineModeDisabled": "Offline mode disabled — Microsoft authentication required",
+    "text.e4all_minecraft.offlineModeEnabled": "Offline mode enabled - cracked clients can now join",
+    "text.e4all_minecraft.offlineModeDisabled": "Offline mode disabled - Microsoft authentication required",
     "text.e4all_minecraft.offlineModeWarning": "⚠ WARNING: Offline Mode is enabled! Authentication is disabled, so anyone with any username can join. This cannot be undone for this session.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

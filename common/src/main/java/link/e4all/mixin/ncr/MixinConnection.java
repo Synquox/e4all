@@ -24,7 +24,7 @@ public abstract class MixinConnection {
     @Shadow
     private PacketListener packetListener;
 
-    // Re-entry guard to prevent infinite recursion when we call send() with the converted packet
+    // prevent recursion loop
     @Unique
     private boolean e4all$converting = false;
 
@@ -77,7 +77,7 @@ public abstract class MixinConnection {
 
     private static Component e4all$decorate(ServerPlayer player, ClientboundPlayerChatPacket chat) {
         try {
-            // Modern approach (1.20+): ChatType.Bound.decorate(Component)
+            // try modern 1.20+ ChatType first
             Object bound = chat.getClass().getMethod("chatType").invoke(chat);
             Method decorate = bound.getClass().getMethod("decorate", Component.class);
             Component content = chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
@@ -85,7 +85,7 @@ public abstract class MixinConnection {
         } catch (Throwable e) {
             if (player != null) {
                 try {
-                    // Fallback approach (1.19.4): Registry resolution
+                    // 1.19 fallback
                     Object chatType = chat.getClass().getMethod("chatType").invoke(chat);
                     Object level;
                     try {
@@ -112,7 +112,7 @@ public abstract class MixinConnection {
                 } catch (Throwable ignored) {}
             }
             
-            // Ultimate fallback: undecorated text content
+            // just plain text fallback
             try {
                 return chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
             } catch (Throwable ignored) {

@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "ڤرماٴينن تمڤتن دأنجورکن ڤد دوماٴين [%s]",
     "text.e4all_minecraft.closeServer": "ڤرماٴينن تمڤتن تيدق لاݢي دأنجورکن سچارا تربوک",
     "text.e4all_minecraft.serverAlreadyClosed": "ڤرماٴينن تمڤتن تيدق دأنجورکن سچارا تربوک",
@@ -8,8 +8,8 @@
     "text.e4all_minecraft.poisonpill.badurl": "e4all تله دموات تورون درڤد سومبر يڠ تيدق دکتاهوءي. سالينن e4all اين موڠکين کتيڠݢلن زمان اتاو دأوبه سواي.",
     "text.e4all_minecraft.hiddenDomain": "دسمبوڽيکن⹁ کليک اونتوق سالين",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "مود offline دداياكن — كلين تيدق رسمي (cracked) كيني بوليه مڽرتاي",
-    "text.e4all_minecraft.offlineModeDisabled": "مود offline دلومڤوهكن — ڤڠساهن Microsoft دڤرلوكن",
+    "text.e4all_minecraft.offlineModeEnabled": "مود offline دداياكن - كلين تيدق رسمي (cracked) كيني بوليه مڽرتاي",
+    "text.e4all_minecraft.offlineModeDisabled": "مود offline دلومڤوهكن - ڤڠساهن Microsoft دڤرلوكن",
     "text.e4all_minecraft.offlineModeWarning": "⚠ امرن: مود Offline دداياكن! ڤڠساهن دلومڤوهكن, جادي سسياڤا سهاج دڠن سبارڠ نام ڤڠݢونا بوليه مڽرتاي. اين تيدق بوليه دبطلكن اونتوق سيسي اين.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

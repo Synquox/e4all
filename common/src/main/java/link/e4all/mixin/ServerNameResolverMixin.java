@@ -46,8 +46,7 @@ public class ServerNameResolverMixin {
                 } if (inner.isPresent()) {
                     return inner;
                 } else if (serverAddress.getPort() == 25565) {
-                    // Skip DNS TXT lookup for raw IP addresses — they never have
-                    // TXT records and the lookup blocks for the full timeout (5s).
+                    // skip dns txt lookup for raw ips since they wont have txt records
                     String host = serverAddress.getHost();
                     if (host != null && (host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$") || host.startsWith("[") || host.contains(":"))) {
                         return Optional.empty();

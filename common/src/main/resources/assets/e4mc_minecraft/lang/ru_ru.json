@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Локальный сервер размещен на домене [%s]",
     "text.e4all_minecraft.closeServer": "Локальный сервер больше не является общедоступным",
     "text.e4all_minecraft.serverAlreadyClosed": "Локальный сервер не является общедоступным",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Собираем данные для диагностики. Пожалуйста, подождите.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all был скачан из неизвестного источника. Эта версия может быть устаревшей или изменённой.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим включен — пиратские клиенты теперь могут подключаться",
-    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим выключен — требуется аутентификация Microsoft",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим включен - пиратские клиенты теперь могут подключаться",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим выключен - требуется аутентификация Microsoft",
     "text.e4all_minecraft.offlineModeWarning": "⚠ ВНИМАНИЕ: Офлайн-режим включен! Аутентификация отключена, поэтому любой желающий может зайти под любым именем. Это действие нельзя отменить для текущей сессии.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

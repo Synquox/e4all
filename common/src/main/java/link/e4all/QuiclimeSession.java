@@ -435,10 +435,10 @@ public class QuiclimeSession {
                                             if (E4allClient.badurl) {
                                                 Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.poisonpill.badurl"));
                                             }
-                                            // Show offline mode warning when LAN actually opens
+                                            // show offline warning on lan open
                                             if (Config.INSTANCE.offlineMode.value()) {
                                                 Config.INSTANCE.offlineWarningShown.setValue(true, true);
-                                                LOGGER.warn("e4all: Offline mode enabled — Microsoft authentication is disabled for this session.");
+                                                LOGGER.warn("e4all: Offline mode enabled, mojang auth is disabled for this session.");
                                                 Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
                                             }
                                         }

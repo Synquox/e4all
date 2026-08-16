@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Локальна гра розміщена на домені [%s]",
     "text.e4all_minecraft.closeServer": "Локальна гра більше не є загальнодоступною",
     "text.e4all_minecraft.serverAlreadyClosed": "Локальна гра не є загальнодоступною",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Збір діагностичних даних. Будь ласка, зачекайте.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all було завантажено з невідомого джерела. Ця копія e4all може бути застарілою або зміненою.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим увімкнено — піратські клієнти тепер можуть приєднуватися",
-    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим вимкнено — потрібна автентифікація Microsoft",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим увімкнено - піратські клієнти тепер можуть приєднуватися",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим вимкнено - потрібна автентифікація Microsoft",
     "text.e4all_minecraft.offlineModeWarning": "⚠ УВАГА: Офлайн-режим увімкнено! Автентифікацію вимкнено, тому будь-хто з будь-яким іменем може приєднатися. Цю дію не можна скасувати для цього сеансу.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

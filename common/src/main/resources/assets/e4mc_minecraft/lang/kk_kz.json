@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Жергілікті сервер [%s] доменінде орналасқан",
     "text.e4all_minecraft.closeServer": "Жергілікті сервер енді жалпыға қолжетімді емес",
     "text.e4all_minecraft.serverAlreadyClosed": "Жергілікті сервер жалпыға қолжетімді емес",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Диагностикалық деректерді жинау. Күте тұрыңыз.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all белгісіз көзден жүктелген. Бұл көшірме ескірген немесе өзгертілген болуы мүмкін.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Офлайн режимі қосылды — пираттық клиенттер енді қосыла алады",
-    "text.e4all_minecraft.offlineModeDisabled": "Офлайн режимі өшірілді — Microsoft аутентификациясы қажет",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн режимі қосылды - пираттық клиенттер енді қосыла алады",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн режимі өшірілді - Microsoft аутентификациясы қажет",
     "text.e4all_minecraft.offlineModeWarning": "⚠ НАЗАР АУДАРЫҢЫЗ: Офлайн режимі қосылған! Аутентификация өшірілген, сондықтан кез келген адам кез келген атпен қосыла алады. Бұл әрекетті осы сессия үшін болдырмау мүмкін емес.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

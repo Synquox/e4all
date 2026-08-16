@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Permainan lokal di-host pada domain [%s]",
     "text.e4all_minecraft.closeServer": "Permainan lokal tidak lagi di-host secara publik",
     "text.e4all_minecraft.serverAlreadyClosed": "Permainan lokal tidak di-host secara publik",
@@ -8,8 +8,8 @@
     "text.e4all_minecraft.poisonpill.badurl": "e4all diunduh dari sumber yang tidak dikenal. Salinan e4all ini mungkin sudah usang atau telah dimodifikasi.",
     "text.e4all_minecraft.hiddenDomain": "disembunyikan, klik untuk menyalin",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Mode offline diaktifkan — klien bajakan (cracked) sekarang dapat bergabung",
-    "text.e4all_minecraft.offlineModeDisabled": "Mode offline dinonaktifkan — otentikasi Microsoft diperlukan",
+    "text.e4all_minecraft.offlineModeEnabled": "Mode offline diaktifkan - klien bajakan (cracked) sekarang dapat bergabung",
+    "text.e4all_minecraft.offlineModeDisabled": "Mode offline dinonaktifkan - otentikasi Microsoft diperlukan",
     "text.e4all_minecraft.offlineModeWarning": "⚠ PERINGATAN: Mode Offline diaktifkan! Otentikasi dinonaktifkan, jadi siapa pun dengan nama pengguna apa pun dapat bergabung. Ini tidak dapat dibatalkan untuk sesi ini.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

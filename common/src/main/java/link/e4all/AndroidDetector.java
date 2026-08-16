@@ -43,7 +43,7 @@ public final class AndroidDetector {
         result = performDetection();
         cachedResult = result;
         if (result.isAndroid()) {
-            LOGGER.warn("e4all: Android environment detected — {}. Native QUIC/Iroh libraries may not be compatible.", result.reason());
+            LOGGER.warn("e4all: Android detected ({}). Native QUIC/Iroh might not work.", result.reason());
         } else {
             LOGGER.debug("e4all: Not running on Android ({})", result.reason());
         }

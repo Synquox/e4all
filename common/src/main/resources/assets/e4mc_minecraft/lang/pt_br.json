@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Jogo local hospedado no domínio [%s]",
     "text.e4all_minecraft.closeServer": "Jogo local não é mais hospedado publicamente",
     "text.e4all_minecraft.serverAlreadyClosed": "Jogo local já está fechado publicamente",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Gerando informações de solução de problemas. Por favor, aguarde.",
     "text.e4all_minecraft.poisonpill.badurl": "O e4all foi baixado de uma fonte desconhecida. Esta cópia do e4all pode estar desatualizada ou modificada.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Modo offline ativado — clientes piratas (cracked) agora podem entrar",
-    "text.e4all_minecraft.offlineModeDisabled": "Modo offline desativado — autenticação da Microsoft necessária",
+    "text.e4all_minecraft.offlineModeEnabled": "Modo offline ativado - clientes piratas (cracked) agora podem entrar",
+    "text.e4all_minecraft.offlineModeDisabled": "Modo offline desativado - autenticação da Microsoft necessária",
     "text.e4all_minecraft.offlineModeWarning": "⚠ AVISO: O Modo Offline está ativado! A autenticação está desativada, então qualquer pessoa com qualquer nome de usuário pode entrar. Isso não pode ser desfeito para esta sessão.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

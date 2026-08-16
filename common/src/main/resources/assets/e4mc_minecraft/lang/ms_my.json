@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Permainan tempatan dianjurkan pada domain [%s]",
     "text.e4all_minecraft.closeServer": "Permainan tempatan tidak lagi dianjurkan secara terbuka",
     "text.e4all_minecraft.serverAlreadyClosed": "Permainan tempatan tidak dianjurkan secara terbuka",
@@ -8,8 +8,8 @@
     "text.e4all_minecraft.poisonpill.badurl": "e4all telah dimuat turun daripada sumber yang tidak diketahui. Salinan e4all ini mungkin ketinggalan zaman atau diubah suai.",
     "text.e4all_minecraft.hiddenDomain": "disembunyikan, klik untuk salin",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Mod offline didayakan — klien tidak rasmi (cracked) kini boleh menyertai",
-    "text.e4all_minecraft.offlineModeDisabled": "Mod offline dilumpuhkan — pengesahan Microsoft diperlukan",
+    "text.e4all_minecraft.offlineModeEnabled": "Mod offline didayakan - klien tidak rasmi (cracked) kini boleh menyertai",
+    "text.e4all_minecraft.offlineModeDisabled": "Mod offline dilumpuhkan - pengesahan Microsoft diperlukan",
     "text.e4all_minecraft.offlineModeWarning": "⚠ AMARAN: Mod Offline didayakan! Pengesahan dilumpuhkan, jadi sesiapa sahaja dengan sebarang nama pengguna boleh menyertai. Ini tidak boleh dibatalkan untuk sesi ini.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

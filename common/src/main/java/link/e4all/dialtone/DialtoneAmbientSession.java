@@ -29,7 +29,7 @@ public class DialtoneAmbientSession {
 
     public synchronized void start() throws Exception {
         if (AndroidDetector.isAndroid()) {
-            E4allClient.LOGGER.warn("e4all: Dialtone (iroh) is not supported on Android — native library requires glibc, Android uses bionic libc.");
+            E4allClient.LOGGER.warn("e4all: Dialtone (iroh) is not supported on Android: native library requires glibc, Android uses bionic libc.");
             throw new UnsupportedOperationException("Dialtone is not supported on Android (bionic libc)");
         }
         if (endpoint != null || dispatcher != null) {

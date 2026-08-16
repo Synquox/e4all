@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Җирле дөнья хәзер тышкы адрес аша ачыла: [%s]",
     "text.e4all_minecraft.closeServer": "Җирле дөнья интернет аша инде ачылмый",
     "text.e4all_minecraft.serverAlreadyClosed": "Җирле дөнья интернеттан инде өзелгән",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Диагностика өчен мәгълүмат җыела. Зинһар, бераз көтегез.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all билгесез чыганактан йөкләнгән. Бу версия искергән яки үзгәртелгән булырга мөмкин.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим кабызылды — пират клиентлар хәзер кушыла ала",
-    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим сүндерелде — Microsoft аутентификациясе таләп ителә",
+    "text.e4all_minecraft.offlineModeEnabled": "Офлайн-режим кабызылды - пират клиентлар хәзер кушыла ала",
+    "text.e4all_minecraft.offlineModeDisabled": "Офлайн-режим сүндерелде - Microsoft аутентификациясе таләп ителә",
     "text.e4all_minecraft.offlineModeWarning": "⚠ ИГЪТИБАР: Офлайн-режим кабызылган! Аутентификация сүндерелгән, шуңа күрә теләсә кем теләсә нинди исем белән керә ала. Бу гамәлне әлеге сессия өчен кире кагып булмый.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

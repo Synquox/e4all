@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Kohalik mäng on üles seatud domeenil [%s]",
     "text.e4all_minecraft.closeServer": "Kohalik mäng ei ole enam avalikult hostitud",
     "text.e4all_minecraft.serverAlreadyClosed": "Kohalik mäng ei ole avalikult hostitud",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Tõrkeotsingu teabe genereerimine. Palun oota.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all laaditi alla tundmatust allikast. See e4all'i koopia võib olla aegunud või muudetud.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Võrguühenduseta režiim lubatud — piraatrakendused (cracked) saavad nüüd liituda",
-    "text.e4all_minecraft.offlineModeDisabled": "Võrguühenduseta režiim keelatud — nõutav Microsofti autentimine",
+    "text.e4all_minecraft.offlineModeEnabled": "Võrguühenduseta režiim lubatud - piraatrakendused (cracked) saavad nüüd liituda",
+    "text.e4all_minecraft.offlineModeDisabled": "Võrguühenduseta režiim keelatud - nõutav Microsofti autentimine",
     "text.e4all_minecraft.offlineModeWarning": "⚠ HOIATUS: Võrguühenduseta režiim on lubatud! Autentimine on keelatud, seega võib liituda igaüks mis tahes kasutajanimega. Seda ei saa selle seansi jaoks tagasi võtta.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

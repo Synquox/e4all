@@ -36,9 +36,9 @@ Just like the original, e4all is a reverse tunneling proxy for Minecraft. It all
 
 | Loader | Supported Versions |
 | :--- | :--- |
-| **Fabric** | 1.18.x — 26.2 |
-| **Forge** | 1.18.x — 1.20.4 |
-| **NeoForge**| 1.18.x — 26.2 |
+| **Fabric** | 1.18.x - 26.2 |
+| **Forge** | 1.18.x - 1.20.4 |
+| **NeoForge**| 1.18.x - 26.2 |
 
 *Note: I am currently working on adding support for 1.17.x, as well as making the same older versions available as the `e4mc-retro` mod, but for `e4all`.*
 

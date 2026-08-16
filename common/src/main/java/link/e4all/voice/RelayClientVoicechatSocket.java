@@ -104,7 +104,7 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     }
 
     private void openDefaultUdp() throws Exception {
-        E4allClient.LOGGER.info("e4all voice: No Dialtone ticket — using default UDP voice socket.");
+        E4allClient.LOGGER.info("e4all voice: No Dialtone ticket, using default UDP voice socket.");
         udpSocket = new DatagramSocket();
         udpSocket.setSoTimeout(0);
 

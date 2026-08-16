@@ -71,7 +71,7 @@ public abstract class ServerConnectionListenerMixin {
                     } else if (existing.state == QuiclimeSession.State.STARTING
                             || existing.state == QuiclimeSession.State.STARTED
                             || existing.state == QuiclimeSession.State.RECONNECTING) {
-                        // Session is still active or reconnecting — don't create a new one
+                        // session is still active, dont make another one
                         E4allClient.LOGGER.info("e4all: Session already active (state: {}), skipping new tunnel creation", existing.state);
                         e4mc$childHandler = null;
                         e4mc$group = null;

@@ -37,7 +37,7 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
             return;
         }
         try {
-            E4allClient.LOGGER.info("ClientVoicechatInitializationEvent fired — installing RelayClientVoicechatSocket.");
+            E4allClient.LOGGER.info("ClientVoicechatInitializationEvent fired: installing RelayClientVoicechatSocket.");
             RelayClientVoicechatSocket socket = new RelayClientVoicechatSocket();
             event.setSocketImplementation(socket);
         } catch (Exception e) {

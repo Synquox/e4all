@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Partida ahora disponible públicamente en [%s]",
     "text.e4all_minecraft.closeServer": "Se ha dejado de compartir públicamente tu partida",
     "text.e4all_minecraft.serverAlreadyClosed": "Tu partida no está siendo compartida",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Generando información de solución de problemas. Por favor espera.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all se descargó de una fuente desconocida. Esta copia de e4all puede estar desactualizada o modificada.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Modo offline activado — los clientes no premium (cracked) ahora pueden unirse",
-    "text.e4all_minecraft.offlineModeDisabled": "Modo offline desactivado — se requiere autenticación de Microsoft",
+    "text.e4all_minecraft.offlineModeEnabled": "Modo offline activado - los clientes no premium (cracked) ahora pueden unirse",
+    "text.e4all_minecraft.offlineModeDisabled": "Modo offline desactivado - se requiere autenticación de Microsoft",
     "text.e4all_minecraft.offlineModeWarning": "⚠ ADVERTENCIA: ¡El modo offline está activado! La autenticación está desactivada, por lo que cualquiera puede unirse con cualquier nombre de usuario. Esto no se puede deshacer para esta sesión.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

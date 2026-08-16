@@ -1,4 +1,4 @@
-{
+﻿{
     "text.e4all_minecraft.domainAssigned": "Trò chơi được mở trên máy chủ : [%s]",
     "text.e4all_minecraft.closeServer": "Trò chơi đã được đóng trên máy chủ",
     "text.e4all_minecraft.serverAlreadyClosed": "Trò chơi chưa được mở trên máy chủ công cộng",
@@ -7,8 +7,8 @@
     "text.e4all_minecraft.doctor.start": "Đang tạo thông tin khắc phục sự cố. Vui lòng chờ.",
     "text.e4all_minecraft.poisonpill.badurl": "e4all được tải xuống từ một nguồn không xác định. Bản sao e4all này có thể đã lỗi thời hoặc bị sửa đổi.",
     "text.e4all_minecraft.offlineMode": "Online Mode: ",
-    "text.e4all_minecraft.offlineModeEnabled": "Đã bật chế độ ngoại tuyến — các client crack hiện có thể tham gia",
-    "text.e4all_minecraft.offlineModeDisabled": "Đã tắt chế độ ngoại tuyến — yêu cầu xác thực Microsoft",
+    "text.e4all_minecraft.offlineModeEnabled": "Đã bật chế độ ngoại tuyến - các client crack hiện có thể tham gia",
+    "text.e4all_minecraft.offlineModeDisabled": "Đã tắt chế độ ngoại tuyến - yêu cầu xác thực Microsoft",
     "text.e4all_minecraft.offlineModeWarning": "⚠ CẢNH BÁO: Chế độ Ngoại tuyến đang bật! Xác thực bị vô hiệu hóa, vì vậy bất kỳ ai với bất kỳ tên người dùng nào cũng có thể tham gia. Không thể hoàn tác điều này trong phiên hiện tại.",
     "text.e4all_minecraft.offlineModeOn": "ON",
     "text.e4all_minecraft.offlineModeOff": "OFF",

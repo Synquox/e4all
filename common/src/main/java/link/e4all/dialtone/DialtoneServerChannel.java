@@ -33,7 +33,7 @@ public class DialtoneServerChannel extends AbstractServerChannel {
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
         if (AndroidDetector.isAndroid()) {
-            E4allClient.LOGGER.warn("e4all: Dialtone server (iroh) is not supported on Android — native library requires glibc, Android uses bionic libc.");
+            E4allClient.LOGGER.warn("e4all: Dialtone server (iroh) is not supported on Android: native library requires glibc, Android uses bionic libc.");
             throw new UnsupportedOperationException("Dialtone is not supported on Android (bionic libc)");
         }
         this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
