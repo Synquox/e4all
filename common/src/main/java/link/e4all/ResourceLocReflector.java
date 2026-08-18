@@ -11,6 +11,7 @@ public final class ResourceLocReflector {
     private static final String[] CANDIDATE_FQNS = {
             "net.minecraft.resources.ResourceLocation",
             "net.minecraft.resources.Identifier",
+            "net.minecraft.util.Identifier",
             "net.minecraft.class_2960"
     };
 
@@ -62,7 +63,7 @@ public final class ResourceLocReflector {
         }
     }
 
-    private static ClassLoader[] collectClassLoaders() {
+    static ClassLoader[] collectClassLoaders() {
         ClassLoader ctx = null;
         try { ctx = Thread.currentThread().getContextClassLoader(); } catch (SecurityException ignored) {}
         ClassLoader own = ResourceLocReflector.class.getClassLoader();

@@ -12,7 +12,6 @@
     "PardonCommandMixin",
     "ServerboundKeyPacketMixin",
     "ServerConnectionListenerMixin",
-    "ServerCommonPacketListenerImplMixin",
     "ServerLoginPacketListenerImplMixin",
     "WhitelistCommandMixin",
     "ncr.MixinConnection",
@@ -28,13 +27,12 @@
     "defaultRequire": 0
   },
   "client": [
-    "ClientCommonPacketListenerImplMixin",
     "ClientHandshakePacketListenerImplMixin",
-    "IntegratedServerMixin",
     "MultiplayerOptionsScreenMixin",
     "ServerAddressMixin",
     "ServerNameResolverMixin",
-    "ShareToLanScreenMixin"
+    "ShareToLanScreenMixin",
+    "WorldOptionsScreenMixin"
   ],
   "server": [
     "ncr.MixinDedicatedServer"

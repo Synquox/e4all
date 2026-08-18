@@ -5,6 +5,7 @@ import de.maxhenkel.voicechat.api.RawUdpPacket;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
 import link.e4all.E4allClient;
@@ -17,9 +18,9 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     private static final RawUdpPacket POISON_PILL = new RawUdpPacketImpl(new byte[0], 0, new InetSocketAddress(0));
@@ -36,20 +37,17 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
     private volatile boolean closed = false;
     private volatile boolean useDialtone = false;
 
-    private static final AtomicReference<String> pendingDialtoneTicket = new AtomicReference<>(null);
-
     public static void setPendingDialtoneTicket(String ticket) {
-        pendingDialtoneTicket.set(ticket);
+        VoiceBridge.setPendingDialtoneTicket(ticket);
     }
 
     public static boolean shouldUseCustomSocket() {
-        if (pendingDialtoneTicket.get() != null) return true;
-        return false;
+        return VoiceBridge.hasPendingDialtoneTicket();
     }
 
     @Override
     public void open() throws Exception {
-        String ticket = pendingDialtoneTicket.getAndSet(null);
+        String ticket = VoiceBridge.getAndClearPendingDialtoneTicket();
         if (ticket != null) {
             useDialtone = true;
             openDialtone(ticket);
@@ -68,7 +66,11 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
 
         Bootstrap bs = new Bootstrap()
                 .group(DialtoneAmbientSession.INSTANCE.group)
-                .channel(DialtoneChannel.class);
+                .channel(DialtoneChannel.class)
+                // Bootstrap requires an initial handler. The voice-specific handlers are
+                // installed immediately after the connection is established, before the
+                // relay receives the voice-stream magic byte.
+                .handler(new ChannelInboundHandlerAdapter());
 
         dialtoneChannel = (DialtoneChannel) bs.connect(new DialtoneAddress(ticket)).syncUninterruptibly().channel();
 
@@ -84,10 +86,17 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
         dialtoneChannel.pipeline().addLast("voiceFrameEncoder",
                 new LengthFieldPrepender(2));
 
-        UUID playerUuid = Minecraft.getInstance().getUser().getProfileId();
+        UUID playerUuid = null;
+        try {
+            playerUuid = Minecraft.getInstance().getUser().getProfileId();
+        } catch (Throwable ignored) {}
         if (playerUuid == null) {
-            playerUuid = UUID.nameUUIDFromBytes(
-                    ("OfflinePlayer:" + Minecraft.getInstance().getUser().getName()).getBytes());
+            try {
+                String name = Minecraft.getInstance().getUser().getName();
+                playerUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+            } catch (Throwable t) {
+                playerUuid = UUID.randomUUID();
+            }
         }
 
         ByteBuf handshake = Unpooled.buffer(1 + 16);
@@ -204,7 +213,7 @@ public final class RelayClientVoicechatSocket implements ClientVoicechatSocket {
         }
         if (udpReaderThread != null) udpReaderThread.interrupt();
 
-        pendingDialtoneTicket.set(null);
+        VoiceBridge.getAndClearPendingDialtoneTicket();
     }
 
     @Override

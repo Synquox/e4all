@@ -28,30 +28,30 @@ public abstract class MixinConnection {
     @Unique
     private boolean e4all$converting = false;
 
-    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V", at = @At("HEAD"), cancellable = true, require = 0)
-    private void e4all$onSend(Packet<?> packet, @Nullable PacketSendListener packetSendListener, CallbackInfo info) {
+    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"), cancellable = true, require = 0)
+    private void e4all$onSend1(Packet<?> packet, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
         if (!e4all$converting && packet instanceof ClientboundPlayerChatPacket chat) {
             info.cancel();
             Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
             e4all$converting = true;
             try {
-                ((Connection) (Object) this).send(systemPacket, packetSendListener);
+                ((Connection) (Object) this).send(systemPacket);
             } finally {
                 e4all$converting = false;
             }
         }
     }
 
-    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;Z)V", at = @At("HEAD"), cancellable = true, require = 0)
-    private void e4all$onSend3(Packet<?> packet, @Nullable PacketSendListener packetSendListener, boolean flush, CallbackInfo info) {
+    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V", at = @At("HEAD"), cancellable = true, require = 0)
+    private void e4all$onSendWithListener(Packet<?> packet, @Nullable PacketSendListener listener, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
         if (!e4all$converting && packet instanceof ClientboundPlayerChatPacket chat) {
             info.cancel();
             Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
             e4all$converting = true;
             try {
-                ((Connection) (Object) this).send(systemPacket, packetSendListener, flush);
+                ((Connection) (Object) this).send(systemPacket);
             } finally {
                 e4all$converting = false;
             }
@@ -75,12 +75,30 @@ public abstract class MixinConnection {
         return new ClientboundSystemChatPacket(decorated, false);
     }
 
+    @Unique
+    private static Component e4all$extractContent(ClientboundPlayerChatPacket chat) {
+        try {
+            Object unsigned = chat.unsignedContent();
+            if (unsigned instanceof java.util.Optional<?> opt) {
+                if (opt.isPresent() && opt.get() instanceof Component c) {
+                    return c;
+                }
+            } else if (unsigned instanceof Component c) {
+                return c;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            return Component.literal(chat.body().content());
+        } catch (Throwable ignored) {}
+        return Component.literal("");
+    }
+
     private static Component e4all$decorate(ServerPlayer player, ClientboundPlayerChatPacket chat) {
         try {
             // try modern 1.20+ ChatType first
             Object bound = chat.getClass().getMethod("chatType").invoke(chat);
             Method decorate = bound.getClass().getMethod("decorate", Component.class);
-            Component content = chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
+            Component content = e4all$extractContent(chat);
             return (Component) decorate.invoke(bound, content);
         } catch (Throwable e) {
             if (player != null) {
@@ -106,18 +124,14 @@ public abstract class MixinConnection {
                     if (resolveMethod != null) {
                         Object resolved = resolveMethod.invoke(chatType, registryAccess);
                         Object chatTypeInstance = resolved.getClass().getMethod("get").invoke(resolved);
-                        Component content = chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
+                        Component content = e4all$extractContent(chat);
                         return (Component) chatTypeInstance.getClass().getMethod("decorate", Component.class).invoke(chatTypeInstance, content);
                     }
                 } catch (Throwable ignored) {}
             }
             
             // just plain text fallback
-            try {
-                return chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
-            } catch (Throwable ignored) {
-                return Component.literal("");
-            }
+            return e4all$extractContent(chat);
         }
     }
 }

@@ -1,6 +1,5 @@
 package link.e4all.mixin;
 
-import link.e4all.OpSessionManager;
 import link.e4all.XaeroWorldIdentity;
 import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
@@ -17,13 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class PlayerListCookieMixin {
     @Shadow public abstract MinecraftServer getServer();
 
-    @Inject(method = "/^(placeNewPlayer|method_14570|m_11261_)$/", at = @At("HEAD"), require = 0)
-    private void e4all$startOpVerification(Connection connection, ServerPlayer player, CommonListenerCookie cookie, CallbackInfo ci) {
-        OpSessionManager.onPlayerConnecting(getServer(), player);
-    }
-
     @Inject(
-            method = "/^(placeNewPlayer|method_14570|m_11261_)$/",
+            method = {"placeNewPlayer", "method_14570", "m_11261_"},
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V",

@@ -27,7 +27,7 @@ public class ServerLoginPacketListenerImplMixin {
     @Shadow @Final
     Connection connection;
 
-    @Redirect(method = "/^(handleHello|method_14369|method_12641|m_10049_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;usesAuthentication()Z"), require = 0)
+    @Redirect(method = {"handleHello", "method_14369", "method_12641", "m_10049_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;usesAuthentication()Z"), require = 0)
     private boolean e4all$redirectUsesAuthentication(net.minecraft.server.MinecraftServer instance) {
         if (link.e4all.Config.INSTANCE.offlineMode.value()) {
             return false;
@@ -39,7 +39,7 @@ public class ServerLoginPacketListenerImplMixin {
     }
 
 
-    @ModifyArg(method = "/^(handleHello|method_14369|method_12641|m_10049_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ClientboundHelloPacket;<init>(Ljava/lang/String;[B[BZ)V"), index = 3, require = 0)
+    @ModifyArg(method = {"handleHello", "method_14369", "method_12641", "m_10049_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ClientboundHelloPacket;<init>(Ljava/lang/String;[B[BZ)V"), index = 3, require = 0)
     private boolean e4all$modifyNeedsAuthentication(boolean needsAuth) {
         if (link.e4all.Config.INSTANCE.offlineMode.value()) {
             return false;
@@ -50,7 +50,7 @@ public class ServerLoginPacketListenerImplMixin {
         return needsAuth;
     }
 
-    @Redirect(method = "/^(handleHello|method_14369|method_12641|m_10049_)$/", at = @At(value = "INVOKE", target = "Ljava/security/PublicKey;getEncoded()[B"), require = 0)
+    @Redirect(method = {"handleHello", "method_14369", "method_12641", "m_10049_"}, at = @At(value = "INVOKE", target = "Ljava/security/PublicKey;getEncoded()[B"), require = 0)
     private byte[] killDoubleEncryption(PublicKey instance) {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return new byte[0];
@@ -58,7 +58,7 @@ public class ServerLoginPacketListenerImplMixin {
         return instance.getEncoded();
     }
 
-    @Redirect(method = "/^(handleKey|method_14384|method_12642|m_10054_)$/", at = @At(value = "INVOKE", target = "*([BLjava/security/PrivateKey;)Z", remap = false), require = 0)
+    @Redirect(method = {"handleKey", "method_14384", "method_12642", "m_10054_"}, at = @At(value = "INVOKE", target = "*([BLjava/security/PrivateKey;)Z", remap = false), require = 0)
     private boolean isChallengeValid(ServerboundKeyPacket instance, byte[] bs, PrivateKey privateKey) {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return true;
@@ -66,7 +66,7 @@ public class ServerLoginPacketListenerImplMixin {
         return instance.isChallengeValid(bs, privateKey);
     }
 
-    @Redirect(method = "/^(handleKey|method_14384|method_12642|m_10054_)$/", at = @At(value = "INVOKE", target = "Ljava/util/Arrays;equals([B[B)Z"), require = 0)
+    @Redirect(method = {"handleKey", "method_14384", "method_12642", "m_10054_"}, at = @At(value = "INVOKE", target = "Ljava/util/Arrays;equals([B[B)Z"), require = 0)
     private boolean isNonceEqual(byte[] lhs, byte[] rhs) {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return true;
@@ -74,7 +74,7 @@ public class ServerLoginPacketListenerImplMixin {
         return Arrays.equals(lhs, rhs);
     }
 
-    @ModifyArg(method = "/^(handleKey|method_14384|method_12642|m_10054_)$/", at = @At(value = "INVOKE", target = "*(Ljava/security/PrivateKey;)[B", remap = false), index = 0, require = 0)
+    @ModifyArg(method = {"handleKey", "method_14384", "method_12642", "m_10054_"}, at = @At(value = "INVOKE", target = "*(Ljava/security/PrivateKey;)[B", remap = false), index = 0, require = 0)
     private PrivateKey patchGetNonce(PrivateKey privateKey) {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
@@ -82,7 +82,7 @@ public class ServerLoginPacketListenerImplMixin {
         return privateKey;
     }
 
-    @Redirect(method = "/^(handleKey|method_14384|method_12642|m_10054_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ServerboundKeyPacket;getSecretKey(Ljava/security/PrivateKey;)Ljavax/crypto/SecretKey;"), require = 0)
+    @Redirect(method = {"handleKey", "method_14384", "method_12642", "m_10054_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ServerboundKeyPacket;getSecretKey(Ljava/security/PrivateKey;)Ljavax/crypto/SecretKey;"), require = 0)
     private SecretKey getSecretKey(ServerboundKeyPacket instance, PrivateKey privateKey) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
@@ -90,7 +90,7 @@ public class ServerLoginPacketListenerImplMixin {
         return instance.getSecretKey(privateKey);
     }
 
-    @Redirect(method = "/^(handleKey|method_14384|method_12642|m_10054_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"), require = 0)
+    @Redirect(method = {"handleKey", "method_14384", "method_12642", "m_10054_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"), require = 0)
     private Cipher getCipher(int i, Key key) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
@@ -98,7 +98,7 @@ public class ServerLoginPacketListenerImplMixin {
         return Crypt.getCipher(i, key);
     }
 
-    @Redirect(method = "/^(handleKey|method_14384|method_12642|m_10054_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;digestData(Ljava/lang/String;Ljava/security/PublicKey;Ljavax/crypto/SecretKey;)[B"), require = 0)
+    @Redirect(method = {"handleKey", "method_14384", "method_12642", "m_10054_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;digestData(Ljava/lang/String;Ljava/security/PublicKey;Ljavax/crypto/SecretKey;)[B"), require = 0)
     private byte[] digestData(String string, PublicKey publicKey, SecretKey secretKey) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return ((DialtoneConnectionExtensions) connection).e4mc$exportKeyingMaterial("EXPERIMENTAL mojang authentication".getBytes(StandardCharsets.UTF_8), new byte[0], 20);

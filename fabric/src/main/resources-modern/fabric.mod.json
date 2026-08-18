@@ -19,6 +19,9 @@
   "entrypoints": {
     "main": [
       "link.e4all.fabric.E4allClientFabric"
+    ],
+    "voicechat": [
+      "link.e4all.voice.E4allVoicechatPlugin"
     ]
   },
   "mixins": [

@@ -12,7 +12,7 @@ import java.net.SocketAddress;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public final class RelayVoicechatSocket implements VoicechatSocket {
+public final class RelayVoicechatSocket implements VoicechatSocket, VoiceConnectionManager.VoicePacketConsumer {
     private static final RawUdpPacket POISON_PILL = new RawUdpPacketImpl(new byte[0], 0, new SyntheticAddress(new UUID(0, 0)));
     private final VoiceConnectionManager manager;
     private final LinkedBlockingQueue<RawUdpPacket> queue = new LinkedBlockingQueue<>();
@@ -28,19 +28,19 @@ public final class RelayVoicechatSocket implements VoicechatSocket {
 
     @Override
     public void open(int port, String bindAddress) throws Exception {
-        this.port = port;
-        this.manager.setSocket(this);
+        this.manager.setPacketConsumer(this);
 
         try {
             InetAddress bind = bindAddress.isEmpty() ? null : InetAddress.getByName(bindAddress);
             udpSocket = new DatagramSocket(port, bind);
+            this.port = udpSocket.getLocalPort();
             udpSocket.setSoTimeout(0);
 
             udpReaderThread = new Thread(this::udpReadLoop, "e4all-vc-udp-reader");
             udpReaderThread.setDaemon(true);
             udpReaderThread.start();
 
-            E4allClient.LOGGER.info("RelayVoicechatSocket opened on UDP port {} + relay", port);
+            E4allClient.LOGGER.info("RelayVoicechatSocket opened on UDP port {} + relay", this.port);
         } catch (IOException e) {
             E4allClient.LOGGER.warn("Could not bind UDP socket on port {}. Relay-only mode.", port, e);
             E4allClient.LOGGER.info("RelayVoicechatSocket opened in relay-only mode (no local UDP)");
@@ -89,10 +89,13 @@ public final class RelayVoicechatSocket implements VoicechatSocket {
 
     @Override
     public void close() {
+        if (closed) return;
         closed = true;
         queue.offer(POISON_PILL);
-        manager.closeAll();
-        manager.setSocket(null);
+
+        if (manager.clearPacketConsumer(this)) {
+            manager.closeAll();
+        }
 
         if (udpSocket != null && !udpSocket.isClosed()) {
             udpSocket.close();
@@ -106,6 +109,11 @@ public final class RelayVoicechatSocket implements VoicechatSocket {
 
     @Override
     public boolean isClosed() { return closed; }
+
+    @Override
+    public void accept(byte[] data, long timestamp, SyntheticAddress address) {
+        enqueuePacket(data, timestamp, address);
+    }
 
     public void enqueuePacket(byte[] data, long timestamp, SyntheticAddress address) {
         queue.offer(new RawUdpPacketImpl(data, timestamp, address));

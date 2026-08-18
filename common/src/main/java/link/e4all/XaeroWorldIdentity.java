@@ -1,6 +1,7 @@
 package link.e4all;
 
 import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -28,7 +29,7 @@ public final class XaeroWorldIdentity {
     private static Object xaeroMinimap() {
         Object cached = xaeroMinimap;
         if (cached != null) return cached;
-        cached = OpSessionPayload.resourceLocation("xaerominimap", "main");
+        cached = ResourceLocReflector.create("xaerominimap", "main");
         xaeroMinimap = cached;
         return cached;
     }
@@ -36,7 +37,7 @@ public final class XaeroWorldIdentity {
     private static Object xaeroWorldmap() {
         Object cached = xaeroWorldmap;
         if (cached != null) return cached;
-        cached = OpSessionPayload.resourceLocation("xaeroworldmap", "main");
+        cached = ResourceLocReflector.create("xaeroworldmap", "main");
         xaeroWorldmap = cached;
         return cached;
     }
@@ -53,8 +54,60 @@ public final class XaeroWorldIdentity {
 
         int worldId = getOrCreateWorldId(server);
         byte[] data = makeXaeroData(worldId);
-        PacketHelper.sendClientbound(player, xaeroMinimap(), data);
-        PacketHelper.sendClientbound(player, xaeroWorldmap(), data);
+        sendXaero(player, xaeroMinimap(), data);
+        sendXaero(player, xaeroWorldmap(), data);
+    }
+
+    private static void sendXaero(ServerPlayer player, Object channel, byte[] data) {
+        try {
+            Packet<?> nativePkt = makeXaeroNativePacket(channel, data);
+            if (nativePkt != null && PacketHelper.testEncode(nativePkt)) {
+                player.connection.send(nativePkt);
+                LOGGER.debug("e4all: sent native Xaero payload on channel {}", channel);
+                return;
+            }
+        } catch (Throwable t) {
+            LOGGER.debug("e4all: could not construct native Xaero packet for {}", channel, t);
+        }
+
+        PacketHelper.sendClientbound(player, channel, data);
+    }
+
+    private static Packet<?> makeXaeroNativePacket(Object channel, byte[] data) {
+        try {
+            Class<?> xaeroPayloadCls = Class.forName("xaero.lib.common.packet.payload.PacketPayload");
+            Object type = PacketHelper.createCustomPayloadType(channel);
+            for (java.lang.reflect.Constructor<?> ctor : xaeroPayloadCls.getDeclaredConstructors()) {
+                try {
+                    ctor.setAccessible(true);
+                    Class<?>[] params = ctor.getParameterTypes();
+                    if (params.length == 2 && type != null && params[0].isAssignableFrom(type.getClass())) {
+                        if (params[1] == byte[].class) {
+                            Object payload = ctor.newInstance(type, data);
+                            return PacketHelper.createPacketFromPayload(true, payload);
+                        } else if (net.minecraft.network.FriendlyByteBuf.class.isAssignableFrom(params[1])) {
+                            Object payload = ctor.newInstance(type, new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data)));
+                            return PacketHelper.createPacketFromPayload(true, payload);
+                        } else if (io.netty.buffer.ByteBuf.class.isAssignableFrom(params[1])) {
+                            Object payload = ctor.newInstance(type, io.netty.buffer.Unpooled.wrappedBuffer(data));
+                            return PacketHelper.createPacketFromPayload(true, payload);
+                        }
+                    } else if (params.length == 1) {
+                        if (params[0] == byte[].class) {
+                            Object payload = ctor.newInstance((Object) data);
+                            return PacketHelper.createPacketFromPayload(true, payload);
+                        } else if (net.minecraft.network.FriendlyByteBuf.class.isAssignableFrom(params[0])) {
+                            Object payload = ctor.newInstance(new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data)));
+                            return PacketHelper.createPacketFromPayload(true, payload);
+                        } else if (io.netty.buffer.ByteBuf.class.isAssignableFrom(params[0])) {
+                            Object payload = ctor.newInstance(io.netty.buffer.Unpooled.wrappedBuffer(data));
+                            return PacketHelper.createPacketFromPayload(true, payload);
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+        return null;
     }
 
     private static byte[] makeXaeroData(int worldId) {

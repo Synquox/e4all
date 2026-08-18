@@ -4,7 +4,7 @@ import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.SmugglersInetSocketAddress;
 import link.e4all.TicketSmuggler;
-import link.e4all.voice.RelayClientVoicechatSocket;
+import link.e4all.voice.VoiceBridge;
 import net.minecraft.client.multiplayer.resolver.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -74,7 +74,7 @@ public class ServerNameResolverMixin {
                                     if (response.statusCode() == 200 && response.body().startsWith("v1_")) {
                                         String ticket = response.body().substring(3);
                                         ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(ticket);
-                                        RelayClientVoicechatSocket.setPendingDialtoneTicket(ticket);
+                                        VoiceBridge.setPendingDialtoneTicket(ticket);
                                         return Optional.of(serverAddress);
                                     }
                                 }
@@ -92,7 +92,7 @@ public class ServerNameResolverMixin {
         return innerHandler;
     }
 
-    @Redirect(method = "/^(resolveAddress|method_2965|m_171848_)$/", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"), require = 0)
+    @Redirect(method = {"resolveAddress", "method_2965", "m_171848_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"), require = 0)
     private Optional<ResolvedServerAddress> resolveBogus(ServerAddressResolver instance, ServerAddress serverAddress) {
         var smuggledTicket = ((TicketSmuggler) (Object) serverAddress).e4mc$getSmuggledTicket();
         if (smuggledTicket != null) {

@@ -54,11 +54,11 @@ public class VoiceStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
             case VoiceFraming.MSG_VOICE_DATA:
                 byte[] data = new byte[buf.readableBytes()];
                 buf.readBytes(data);
-                RelayVoicechatSocket socket = manager.getSocket();
-                if (socket != null) {
-                    socket.enqueuePacket(data, System.currentTimeMillis(), syntheticAddress);
+                VoiceConnectionManager.VoicePacketConsumer consumer = manager.getPacketConsumer();
+                if (consumer != null) {
+                    consumer.accept(data, System.currentTimeMillis(), syntheticAddress);
                 } else {
-                    E4allClient.LOGGER.warn("Voice data received for player {} but RelayVoicechatSocket is null!", playerUuid);
+                    E4allClient.LOGGER.warn("Voice data received for player {} but VoicePacketConsumer is null!", playerUuid);
                 }
                 break;
             default:

@@ -1,73 +1,167 @@
 package link.e4all.mixin;
+
 import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.Mirror;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.ShareToLanScreen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import java.lang.reflect.Constructor;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.List;
-@Mixin(ShareToLanScreen.class)
+
+@Mixin(targets = {
+        "net.minecraft.client.gui.screens.ShareToLanScreen",
+        "net.minecraft.class_527"
+}, remap = false)
 public abstract class ShareToLanScreenMixin extends Screen {
+    @Unique
+    private Object e4all$button = null;
+
     protected ShareToLanScreenMixin(Component component) {
         super(component);
     }
-    @Inject(method = "/^(init|method_25426|m_7856_|initLayout|m_280264_|method_48413)$/", at = @At("TAIL"), require = 0)
-    private void e4all$addOfflineModeButton(CallbackInfo ci) {
-        E4allClient.LOGGER.warn("[e4all] ShareToLanScreen.init() TAIL reached: injecting Online Mode toggle button");
+
+    @Inject(method = {
+            "init", "method_25426", "m_7856_",
+            "initLayout", "method_48413", "m_280264_",
+            "repositionElements"
+    }, at = @At("TAIL"), require = 0, remap = false)
+    private void e4all$onInit(CallbackInfo ci) {
+        E4allClient.LOGGER.info("[e4all] >>> e4all$onInit FIRED on {}", this.getClass().getName());
+        e4all$updateOrCreateButton();
+    }
+
+    @Inject(method = {
+            "repositionElements", "method_48413", "m_280264_"
+    }, at = @At("TAIL"), require = 0, remap = false)
+    private void e4all$onReposition(CallbackInfo ci) {
+        E4allClient.LOGGER.info("[e4all] >>> e4all$onReposition FIRED on {}", this.getClass().getName());
+        e4all$updateOrCreateButton();
+    }
+
+    @Unique
+    private void e4all$updateOrCreateButton() {
         try {
-            boolean currentValue = Config.INSTANCE.offlineMode.value();
-            Component buttonText = e4all$getButtonText(currentValue);
+            E4allClient.LOGGER.info("[e4all] e4all$updateOrCreateButton called, screen size={}x{}", this.width, this.height);
             int buttonW = 150;
             int buttonH = 20;
             int[] pos = e4all$findBestPosition(buttonW, buttonH);
             int x = pos[0];
             int y = pos[1];
-            E4allClient.LOGGER.warn("[e4all] Computed button position: x={}, y={} (screen {}x{})", x, y, this.width, this.height);
-            Object button = e4all$createButton(x, y, buttonW, buttonH, buttonText);
-            if (button == null) {
-                E4allClient.LOGGER.warn("[e4all] Could not construct Online Mode toggle button on this MC version");
+            E4allClient.LOGGER.info("[e4all] Button position: ({}, {})", x, y);
+
+            if (this.e4all$button != null && e4all$isWidgetInScreen(this.e4all$button)) {
+                e4all$setWidgetPosition(this.e4all$button, x, y);
+                e4all$ensureInScreenLists(this.e4all$button);
+                E4allClient.LOGGER.info("[e4all] Existing button repositioned to ({}, {})", x, y);
                 return;
             }
-            E4allClient.LOGGER.warn("[e4all] Button instance created: {}", button.getClass().getName());
-            if (!e4all$addWidgetReflectively(button)) {
-                E4allClient.LOGGER.warn("[e4all] Could not add Online Mode toggle button to the LAN screen: reflective addRenderableWidget failed");
-                e4all$logAvailableScreenMethods();
-                return;
+
+            boolean currentValue = Config.INSTANCE.offlineMode.value();
+            Component buttonText = e4all$getButtonText(currentValue);
+            E4allClient.LOGGER.info("[e4all] Creating button with text: {}", buttonText);
+            this.e4all$button = e4all$createButton(x, y, buttonW, buttonH, buttonText);
+            if (this.e4all$button != null) {
+                E4allClient.LOGGER.info("[e4all] Button created: {}", this.e4all$button.getClass().getName());
+                if (e4all$addWidgetReflectively(this.e4all$button)) {
+                    E4allClient.LOGGER.info("[e4all] Online Mode toggle button added at ({}, {})", x, y);
+                } else {
+                    E4allClient.LOGGER.warn("[e4all] addWidgetReflectively returned false! Button NOT added.");
+                }
+            } else {
+                E4allClient.LOGGER.warn("[e4all] e4all$createButton returned null! Button creation FAILED.");
             }
-            E4allClient.LOGGER.warn("[e4all] Online Mode toggle button added successfully at ({}, {})", x, y);
         } catch (Throwable e) {
-            E4allClient.LOGGER.warn("[e4all] Failed to add Online Mode toggle button to LAN screen", e);
+            E4allClient.LOGGER.warn("[e4all] Failed to update Online Mode toggle button", e);
         }
     }
+
+    @Unique
+    private boolean e4all$isWidgetInScreen(Object widget) {
+        if (widget == null) return false;
+        List<Object> widgets = e4all$getWidgetList();
+        return widgets != null && widgets.contains(widget);
+    }
+
+    @Unique
+    private static void e4all$setWidgetPosition(Object widget, int x, int y) {
+        if (widget == null) return;
+        String[] setPosNames = {"setPosition", "method_46421", "m_253211_"};
+        for (String name : setPosNames) {
+            try {
+                Method m = widget.getClass().getMethod(name, int.class, int.class);
+                m.invoke(widget, x, y);
+                return;
+            } catch (Throwable ignored) {}
+        }
+        String[] setXNames = {"setX", "method_46419", "m_252865_"};
+        for (String name : setXNames) {
+            try {
+                Method m = widget.getClass().getMethod(name, int.class);
+                m.invoke(widget, x);
+                break;
+            } catch (Throwable ignored) {}
+        }
+        String[] setYNames = {"setY", "method_46420", "m_253010_"};
+        for (String name : setYNames) {
+            try {
+                Method m = widget.getClass().getMethod(name, int.class);
+                m.invoke(widget, y);
+                break;
+            } catch (Throwable ignored) {}
+        }
+
+        String[] xFields = {"x", "field_22758", "f_93618_", "field_22560", "f_93902_"};
+        String[] yFields = {"y", "field_22759", "f_93619_", "field_22561", "f_93903_"};
+        Class<?> c = widget.getClass();
+        while (c != null && c != Object.class) {
+            for (String fName : xFields) {
+                try {
+                    Field f = c.getDeclaredField(fName);
+                    f.setAccessible(true);
+                    f.setInt(widget, x);
+                    break;
+                } catch (Throwable ignored) {}
+            }
+            for (String fName : yFields) {
+                try {
+                    Field f = c.getDeclaredField(fName);
+                    f.setAccessible(true);
+                    f.setInt(widget, y);
+                    break;
+                } catch (Throwable ignored) {}
+            }
+            c = c.getSuperclass();
+        }
+    }
+
     @Unique
     private int[] e4all$findBestPosition(int buttonW, int buttonH) {
-        int leftX = this.width / 2 - 155;
         int centerX = this.width / 2 - buttonW / 2;
-        int rightX = this.width / 2 + 5;
-        int defaultY = Math.min(128, this.height - 56);
+        int maxY = this.height - buttonH - 5;
+        int defaultY = Math.min(156, maxY);
 
         try {
             List<Object> widgets = e4all$getWidgetList();
             if (widgets == null || widgets.isEmpty()) {
-                return new int[]{leftX, defaultY};
+                return new int[]{centerX, defaultY};
             }
 
-            int bottomThreshold = this.height - 40;
+            int bottomThreshold = this.height - 35;
             for (Object widget : widgets) {
+                if (widget == this.e4all$button) continue;
                 int wy = e4all$getWidgetY(widget);
-                if (wy >= this.height - 45 && wy < this.height) {
+                if (wy >= this.height - 48 && wy < this.height) {
                     if (wy < bottomThreshold) {
                         bottomThreshold = wy;
                     }
@@ -75,72 +169,40 @@ public abstract class ShareToLanScreenMixin extends Screen {
             }
 
             int maxContentBottom = 0;
-            Object lowestWidget = null;
             for (Object widget : widgets) {
+                if (widget == this.e4all$button) continue;
                 int wy = e4all$getWidgetY(widget);
                 if (wy >= 0 && wy < bottomThreshold) {
                     int wh = e4all$getWidgetHeight(widget);
                     int bottom = wy + (wh > 0 ? wh : 20);
                     if (bottom > maxContentBottom) {
                         maxContentBottom = bottom;
-                        lowestWidget = widget;
                     }
                 }
             }
 
-            if (maxContentBottom > 0 && lowestWidget != null) {
-                int lowestY = e4all$getWidgetY(lowestWidget);
-                int lowestH = e4all$getWidgetHeight(lowestWidget);
-                int lowestX = e4all$getWidgetX(lowestWidget);
-                int lowestW = e4all$getWidgetWidth(lowestWidget);
-
-                boolean leftOccupied = false;
-                boolean rightOccupied = false;
-                int widgetsInLowestRow = 0;
-                for (Object widget : widgets) {
-                    int wy = e4all$getWidgetY(widget);
-                    if (Math.abs(wy - lowestY) <= 6) {
-                        widgetsInLowestRow++;
-                        int wx = e4all$getWidgetX(widget);
-                        int ww = e4all$getWidgetWidth(widget);
-                        if (wx < this.width / 2) {
-                            leftOccupied = true;
-                        }
-                        if (wx + ww > this.width / 2) {
-                            rightOccupied = true;
-                        }
-                    }
+            if (maxContentBottom > 0) {
+                int candidateY = maxContentBottom + 8;
+                if (candidateY + buttonH <= bottomThreshold - 4) {
+                    return new int[]{centerX, Math.min(candidateY, maxY)};
                 }
 
-                if (leftOccupied && !rightOccupied && lowestH == buttonH && lowestW <= 160) {
-                    return new int[]{rightX, lowestY};
-                }
-                if (!leftOccupied && rightOccupied && lowestH == buttonH && lowestW <= 160) {
-                    return new int[]{leftX, lowestY};
+                int available = bottomThreshold - maxContentBottom;
+                if (available >= buttonH + 2) {
+                    int tightGap = Math.max(2, (available - buttonH) / 2);
+                    return new int[]{centerX, Math.min(maxContentBottom + tightGap, maxY)};
                 }
 
-                boolean isCenteredWidget = (widgetsInLowestRow == 1) && 
-                    (Math.abs((lowestX + lowestW / 2) - (this.width / 2)) <= 30 || lowestW > 160 || lowestWidget.getClass().getSimpleName().contains("EditBox"));
-
-                int gap = 6;
-                int candidateY = maxContentBottom + gap;
-
-                if (isCenteredWidget) {
-                    if (candidateY + buttonH <= bottomThreshold - 2) {
-                        return new int[]{centerX, candidateY};
-                    }
-                } else {
-                    if (candidateY + buttonH <= bottomThreshold - 2) {
-                        return new int[]{leftX, candidateY};
-                    }
-                }
+                // not enough space, place above bottom buttons
+                return new int[]{centerX, Math.min(Math.max(bottomThreshold - buttonH - 2, defaultY), maxY)};
             }
         } catch (Throwable t) {
             E4allClient.LOGGER.debug("[e4all] Could not scan widgets for positioning, using fallback", t);
         }
 
-        return new int[]{leftX, defaultY};
+        return new int[]{centerX, defaultY};
     }
+
     @Unique
     private List<Object> e4all$getWidgetList() {
         List<Object> allWidgets = new java.util.ArrayList<>();
@@ -160,17 +222,15 @@ public abstract class ShareToLanScreenMixin extends Screen {
                 }
             } catch (Throwable ignored) {}
         }
+
         String[] fieldNames = {
-            "renderables",    
-            "children",       
-            "field_33814",    
-            "field_22764",
-            "f_169369_",      
-            "f_96541_",
-            "drawables",
-            "buttons",
-            "field_22761",
-            "f_96540_"
+                "renderables",
+                "children",
+                "field_33814",
+                "f_169369_",
+                "drawables",
+                "field_22765",
+                "f_96541_"
         };
         Class<?> c = Screen.class;
         while (c != null && c != Object.class) {
@@ -193,125 +253,107 @@ public abstract class ShareToLanScreenMixin extends Screen {
             }
             c = c.getSuperclass();
         }
+
         return allWidgets;
     }
+
     @Unique
     private static int e4all$getWidgetX(Object widget) {
-        String[] methodNames = {"getX", "method_46427", "method_25364", "m_252754_", "getLeft", "x"};
+        if (widget == null) return -1;
+        String[] methodNames = {"getX", "method_46427", "m_252754_", "getLeft", "x"};
         for (String name : methodNames) {
             try {
                 Method m = widget.getClass().getMethod(name);
-                if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
+                if (m.getParameterCount() == 0 && (m.getReturnType() == int.class || m.getReturnType() == Integer.class)) {
                     return (int) m.invoke(widget);
                 }
             } catch (Throwable ignored) {}
         }
-        String[] fieldNames = {"x", "field_22758", "f_93902_", "field_22560", "f_93618_"};
-        for (String name : fieldNames) {
-            Class<?> c = widget.getClass();
-            while (c != null && c != Object.class) {
+        String[] fieldNames = {"x", "field_22758", "f_93618_", "field_22560", "f_93902_"};
+        Class<?> c = widget.getClass();
+        while (c != null && c != Object.class) {
+            for (String name : fieldNames) {
                 try {
                     Field f = c.getDeclaredField(name);
-                    if (f.getType() == int.class) {
+                    if (f.getType() == int.class || f.getType() == Integer.class) {
                         f.setAccessible(true);
                         return (int) f.get(widget);
                     }
                 } catch (Throwable ignored) {}
-                c = c.getSuperclass();
             }
+            c = c.getSuperclass();
         }
         return -1;
     }
+
     @Unique
     private static int e4all$getWidgetY(Object widget) {
-        String[] methodNames = {"getY", "method_46426", "method_25331", "m_252907_", "getTop", "y"};
+        if (widget == null) return -1;
+        String[] methodNames = {"getY", "method_46426", "m_252907_", "getTop", "y"};
         for (String name : methodNames) {
             try {
                 Method m = widget.getClass().getMethod(name);
-                if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
+                if (m.getParameterCount() == 0 && (m.getReturnType() == int.class || m.getReturnType() == Integer.class)) {
                     return (int) m.invoke(widget);
                 }
             } catch (Throwable ignored) {}
         }
-        String[] fieldNames = {"y", "field_22561", "field_22760", "f_93903_", "f_93619_"};
-        for (String name : fieldNames) {
-            Class<?> c = widget.getClass();
-            while (c != null && c != Object.class) {
+        String[] fieldNames = {"y", "field_22759", "f_93619_", "field_22561", "f_93903_"};
+        Class<?> c = widget.getClass();
+        while (c != null && c != Object.class) {
+            for (String name : fieldNames) {
                 try {
                     Field f = c.getDeclaredField(name);
-                    if (f.getType() == int.class) {
+                    if (f.getType() == int.class || f.getType() == Integer.class) {
                         f.setAccessible(true);
                         return (int) f.get(widget);
                     }
                 } catch (Throwable ignored) {}
-                c = c.getSuperclass();
             }
+            c = c.getSuperclass();
         }
         return -1;
     }
-    @Unique
-    private static int e4all$getWidgetWidth(Object widget) {
-        String[] methodNames = {"getWidth", "method_25368", "method_25365", "m_93699_", "width"};
-        for (String name : methodNames) {
-            try {
-                Method m = widget.getClass().getMethod(name);
-                if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
-                    return (int) m.invoke(widget);
-                }
-            } catch (Throwable ignored) {}
-        }
-        String[] fieldNames = {"width", "field_22759", "f_93904_", "f_93620_"};
-        for (String name : fieldNames) {
-            Class<?> c = widget.getClass();
-            while (c != null && c != Object.class) {
-                try {
-                    Field f = c.getDeclaredField(name);
-                    if (f.getType() == int.class) {
-                        f.setAccessible(true);
-                        return (int) f.get(widget);
-                    }
-                } catch (Throwable ignored) {}
-                c = c.getSuperclass();
-            }
-        }
-        return 150;
-    }
+
     @Unique
     private static int e4all$getWidgetHeight(Object widget) {
-        String[] methodNames = {"getHeight", "method_25364", "method_25368", "m_93694_", "getBottom", "height"};
+        if (widget == null) return 20;
+        String[] methodNames = {"getHeight", "method_25368", "m_93694_", "height"};
         for (String name : methodNames) {
             try {
                 Method m = widget.getClass().getMethod(name);
-                if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
+                if (m.getParameterCount() == 0 && (m.getReturnType() == int.class || m.getReturnType() == Integer.class)) {
                     return (int) m.invoke(widget);
                 }
             } catch (Throwable ignored) {}
         }
-        String[] fieldNames = {"height", "field_22760", "f_93905_", "f_93621_"};
-        for (String name : fieldNames) {
-            Class<?> c = widget.getClass();
-            while (c != null && c != Object.class) {
+        String[] fieldNames = {"height", "field_22760", "f_93620_", "field_22563", "f_93905_"};
+        Class<?> c = widget.getClass();
+        while (c != null && c != Object.class) {
+            for (String name : fieldNames) {
                 try {
                     Field f = c.getDeclaredField(name);
-                    if (f.getType() == int.class) {
+                    if (f.getType() == int.class || f.getType() == Integer.class) {
                         f.setAccessible(true);
                         return (int) f.get(widget);
                     }
                 } catch (Throwable ignored) {}
-                c = c.getSuperclass();
             }
+            c = c.getSuperclass();
         }
         return 20;
     }
+
     @Unique
     private Component e4all$getButtonText(boolean offlineMode) {
         Component label = Mirror.translatable("text.e4all_minecraft.onlineMode");
         Component value = Mirror.translatable(offlineMode ? "text.e4all_minecraft.onlineModeFalse" : "text.e4all_minecraft.onlineModeTrue");
         return Mirror.append(
-            Mirror.literal(""),
-            Mirror.append(label, value)
+                Mirror.literal(""),
+                Mirror.append(label, value)
         );
     }
+
     @Unique
     private void e4all$onToggle(Object buttonObj) {
         boolean newValue = !Config.INSTANCE.offlineMode.value();
@@ -332,6 +374,7 @@ public abstract class ShareToLanScreenMixin extends Screen {
             E4allClient.LOGGER.debug("[e4all] Could not update button label after toggle", t);
         }
     }
+
     @Unique
     private Object e4all$createButton(int x, int y, int w, int h, Component text) {
         InvocationHandler handler = (proxy, method, args) -> {
@@ -340,122 +383,166 @@ public abstract class ShareToLanScreenMixin extends Screen {
             }
             if (method.getReturnType() == void.class) return null;
             if (method.getReturnType() == boolean.class) return false;
-            if (method.getReturnType() == int.class) return 0;
             return null;
         };
+
         try {
-            Class<?> callbackClass = null;
-            for (Class<?> c : Button.class.getDeclaredClasses()) {
-                if (c.getName().endsWith("OnPress")) {
-                    callbackClass = c;
+            Class<?> onPressClass = null;
+            for (Method m : Button.class.getMethods()) {
+                if (Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2
+                        && Component.class.isAssignableFrom(m.getParameterTypes()[0])
+                        && m.getParameterTypes()[1].isInterface()) {
+                    onPressClass = m.getParameterTypes()[1];
                     break;
                 }
             }
-            if (callbackClass == null) {
-                for (Method m : Button.class.getMethods()) {
-                    if (java.lang.reflect.Modifier.isStatic(m.getModifiers())
-                            && m.getParameterCount() == 2
-                            && m.getParameterTypes()[0].equals(Component.class)
-                            && m.getParameterTypes()[1].isInterface()) {
-                        callbackClass = m.getParameterTypes()[1];
-                        break;
-                    }
-                }
-            }
-            if (callbackClass == null) {
+            if (onPressClass == null) {
                 for (Method m : Button.class.getDeclaredMethods()) {
-                    if (java.lang.reflect.Modifier.isStatic(m.getModifiers())
-                            && m.getParameterCount() == 2
-                            && m.getParameterTypes()[0].equals(Component.class)
+                    if (Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2
+                            && Component.class.isAssignableFrom(m.getParameterTypes()[0])
                             && m.getParameterTypes()[1].isInterface()) {
-                        callbackClass = m.getParameterTypes()[1];
+                        onPressClass = m.getParameterTypes()[1];
                         break;
                     }
                 }
             }
-            if (callbackClass != null) {
-                Object onPress = Proxy.newProxyInstance(
-                    callbackClass.getClassLoader(),
-                    new Class<?>[]{callbackClass},
-                    handler
+
+            if (onPressClass != null) {
+                E4allClient.LOGGER.debug("[e4all] Found OnPress interface from builder method: {}", onPressClass.getName());
+                Object onPressProxy = Proxy.newProxyInstance(
+                        onPressClass.getClassLoader(),
+                        new Class<?>[]{onPressClass},
+                        handler
                 );
-                return Mirror.createButton(x, y, w, h, text, onPress);
+                Object btn = Mirror.createButton(x, y, w, h, text, onPressProxy);
+                if (btn != null) return btn;
+                E4allClient.LOGGER.warn("[e4all] Mirror.createButton returned null with OnPress={}", onPressClass.getName());
             }
         } catch (Throwable t) {
-            E4allClient.LOGGER.debug("[e4all] Failed to create proxy for Button callback", t);
+            E4allClient.LOGGER.warn("[e4all] Failed to create button via builder method strategy", t);
         }
+
+        try {
+            for (Class<?> nested : Button.class.getDeclaredClasses()) {
+                if (!nested.isInterface()) continue;
+                try {
+                    Object onPressProxy = Proxy.newProxyInstance(
+                            nested.getClassLoader(),
+                            new Class<?>[]{nested},
+                            handler
+                    );
+                    Object btn = Mirror.createButton(x, y, w, h, text, onPressProxy);
+                    if (btn != null) {
+                        E4allClient.LOGGER.debug("[e4all] Button created with nested interface: {}", nested.getName());
+                        return btn;
+                    }
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.warn("[e4all] Failed to create button via nested interface scan", t);
+        }
+
+        E4allClient.LOGGER.warn("[e4all] All button creation strategies failed");
         return null;
     }
+
     @Unique
-    private boolean e4all$addWidgetReflectively(Object widget) {
-        Class<?> widgetClass = widget.getClass();
-        String[] candidates = {
-            "addRenderableWidget", 
-            "method_37063",        
-            "m_142416_",           
-            "addDrawableChild"     
-        };
-        Method best = e4all$findScreenSingleArgMethod(widgetClass, candidates);
-        if (best == null) {
-            best = e4all$findScreenSingleArgMethod(widgetClass, null);
-        }
-        if (best == null) {
-            E4allClient.LOGGER.warn("[e4all] No addRenderableWidget-like method found on Screen hierarchy for widget type {}", widgetClass.getName());
-            return false;
-        }
-        try {
-            best.setAccessible(true);
-            E4allClient.LOGGER.debug("[e4all] Invoking {} on Screen with widget {}", best.getName(), widgetClass.getSimpleName());
-            best.invoke(this, widget);
-            return true;
-        } catch (Throwable t) {
-            E4allClient.LOGGER.warn("[e4all] Failed to invoke {} reflectively", best.getName(), t);
-            return false;
-        }
+    private static final String[] E4ALL$RENDERABLE_FIELDS = {
+            "renderables", "drawables", "field_33814", "field_22765", "f_169369_"
+    };
+
+    @Unique
+    private static final String[] E4ALL$CHILDREN_FIELDS = {
+            "children", "field_33815", "field_22764", "f_96541_"
+    };
+
+    @Unique
+    private static final String[] E4ALL$NARRATABLE_FIELDS = {
+            "narratables", "selectables", "field_33816", "f_169370_"
+    };
+
+    @Unique
+    private void e4all$ensureInScreenLists(Object widget) {
+        if (widget == null) return;
+        e4all$ensureInList(E4ALL$RENDERABLE_FIELDS, widget);
+        e4all$ensureInList(E4ALL$CHILDREN_FIELDS, widget);
+        e4all$ensureInList(E4ALL$NARRATABLE_FIELDS, widget);
     }
+
     @Unique
-    private static Method e4all$findScreenSingleArgMethod(Class<?> widgetClass, String[] nameFilter) {
+    private void e4all$ensureInList(String[] fieldNames, Object widget) {
+        if (widget == null) return;
         Class<?> c = Screen.class;
         while (c != null && c != Object.class) {
-            for (Method m : c.getDeclaredMethods()) {
-                if (Modifier.isStatic(m.getModifiers())) continue;
-                if (m.getParameterCount() != 1) continue;
-                Class<?> p = m.getParameterTypes()[0];
-                if (!p.isAssignableFrom(widgetClass)) continue;
-                if (nameFilter != null) {
-                    boolean match = false;
-                    for (String n : nameFilter) {
-                        if (m.getName().equals(n)) {
-                            match = true;
-                            break;
-                        }
-                    }
-                    if (!match) continue;
-                }
-                if (nameFilter == null) {
-                    String pn = p.getSimpleName();
-                    if (!pn.contains("Widget") && !pn.contains("GuiEventListener") && !pn.contains("Renderable")) {
-                        continue;
+            for (Field f : c.getDeclaredFields()) {
+                for (String name : fieldNames) {
+                    if (f.getName().equals(name) && List.class.isAssignableFrom(f.getType())) {
+                        try {
+                            f.setAccessible(true);
+                            @SuppressWarnings("unchecked")
+                            List<Object> list = (List<Object>) f.get(this);
+                            if (list != null && !list.contains(widget)) {
+                                list.add(widget);
+                            }
+                        } catch (Throwable ignored) {}
                     }
                 }
-                return m;
             }
             c = c.getSuperclass();
         }
-        return null;
     }
+
     @Unique
-    private void e4all$logAvailableScreenMethods() {
-        try {
-            Class<?> c = this.getClass();
+    private boolean e4all$addWidgetReflectively(Object widget) {
+        if (widget == null) return false;
+        Class<?> widgetClass = widget.getClass();
+
+        String[] preferredNames = {
+                "addRenderableWidget",
+                "addDrawableChild",
+                "method_37063",
+                "m_142416_",
+                "addButton",
+                "method_25411",
+                "m_96587_",
+                "m_7787_"
+        };
+
+        boolean invoked = false;
+        Method best = e4all$findScreenMethodByName(widgetClass, preferredNames);
+        if (best != null) {
+            try {
+                best.setAccessible(true);
+                best.invoke(this, widget);
+                invoked = true;
+                E4allClient.LOGGER.info("[e4all] Added widget via method: {}", best.getName());
+            } catch (Throwable t) {
+                E4allClient.LOGGER.warn("[e4all] Failed to invoke {} reflectively", best.getName(), t);
+            }
+        }
+
+        e4all$ensureInScreenLists(widget);
+
+        return invoked || e4all$isWidgetInScreen(widget);
+    }
+
+    @Unique
+    private static Method e4all$findScreenMethodByName(Class<?> widgetClass, String[] priorityNames) {
+        for (String name : priorityNames) {
+            Class<?> c = Screen.class;
             while (c != null && c != Object.class) {
                 for (Method m : c.getDeclaredMethods()) {
-                    if (m.getParameterCount() == 1 && !Modifier.isStatic(m.getModifiers())) {
-                        E4allClient.LOGGER.debug("[e4all-diag] {}.{}({})", c.getSimpleName(), m.getName(), m.getParameterTypes()[0].getSimpleName());
+                    if (Modifier.isStatic(m.getModifiers())) continue;
+                    if (m.getParameterCount() != 1) continue;
+                    if (!m.getName().equals(name)) continue;
+                    Class<?> p = m.getParameterTypes()[0];
+                    if (p.isAssignableFrom(widgetClass)) {
+                        return m;
                     }
                 }
                 c = c.getSuperclass();
             }
-        } catch (Throwable ignored) {}
+        }
+        return null;
     }
 }

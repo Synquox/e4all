@@ -1,12 +1,14 @@
 package link.e4all.voice;
 
 import de.maxhenkel.voicechat.api.VoicechatApi;
+import de.maxhenkel.voicechat.api.ForgeVoicechatPlugin;
 import de.maxhenkel.voicechat.api.VoicechatPlugin;
 import de.maxhenkel.voicechat.api.events.ClientVoicechatInitializationEvent;
 import de.maxhenkel.voicechat.api.events.EventRegistration;
 import de.maxhenkel.voicechat.api.events.VoicechatServerStartingEvent;
 import link.e4all.E4allClient;
 
+@ForgeVoicechatPlugin
 public final class E4allVoicechatPlugin implements VoicechatPlugin {
     @Override
     public String getPluginId() {
@@ -32,7 +34,7 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
     }
 
     private void onClientInit(ClientVoicechatInitializationEvent event) {
-        if (!RelayClientVoicechatSocket.shouldUseCustomSocket()) {
+        if (!VoiceBridge.hasPendingDialtoneTicket()) {
             E4allClient.LOGGER.debug("Not connecting to an e4all host. Using default SVC socket.");
             return;
         }

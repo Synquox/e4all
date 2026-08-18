@@ -2,7 +2,6 @@ package link.e4all.voice;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
-import io.netty.util.ReferenceCountUtil;
 import link.e4all.E4allClient;
 
 import java.util.HashMap;
@@ -13,10 +12,24 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class VoiceConnectionManager {
     public static final VoiceConnectionManager INSTANCE = new VoiceConnectionManager();
     private final ConcurrentHashMap<UUID, Channel> streams = new ConcurrentHashMap<>();
-    private volatile RelayVoicechatSocket socket;
+    private final java.util.concurrent.atomic.AtomicReference<VoicePacketConsumer> packetConsumer = new java.util.concurrent.atomic.AtomicReference<>(null);
 
-    public void setSocket(RelayVoicechatSocket socket) { this.socket = socket; }
-    public RelayVoicechatSocket getSocket() { return socket; }
+    @FunctionalInterface
+    public interface VoicePacketConsumer {
+        void accept(byte[] data, long timestamp, SyntheticAddress address);
+    }
+
+    public void setPacketConsumer(VoicePacketConsumer consumer) {
+        this.packetConsumer.set(consumer);
+    }
+
+    public VoicePacketConsumer getPacketConsumer() {
+        return packetConsumer.get();
+    }
+
+    public boolean clearPacketConsumer(VoicePacketConsumer expected) {
+        return packetConsumer.compareAndSet(expected, null);
+    }
 
     public void registerStream(UUID uuid, Channel channel) {
         Channel old = streams.put(uuid, channel);

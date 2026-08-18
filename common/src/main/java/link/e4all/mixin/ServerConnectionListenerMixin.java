@@ -23,19 +23,19 @@ public abstract class ServerConnectionListenerMixin {
     @Unique
     private EventLoopGroup e4mc$group;
 
-    @ModifyArg(method = "/^(startTcpServerListener|method_14354|m_9711_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;childHandler(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
+    @ModifyArg(method = {"startTcpServerListener", "method_14354", "m_9711_"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;childHandler(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
     private ChannelHandler interceptHandler(ChannelHandler childHandler) {
         e4mc$childHandler = childHandler;
         return childHandler;
     }
 
-    @ModifyArg(method = "/^(startTcpServerListener|method_14354|m_9711_)$/", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
+    @ModifyArg(method = {"startTcpServerListener", "method_14354", "m_9711_"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
     private EventLoopGroup interceptGroup(EventLoopGroup group) {
         e4mc$group = group;
         return group;
     }
 
-    @Inject(method = "/^(startTcpServerListener|method_14354|m_9711_)$/", at = @At(value = "TAIL"), require = 0)
+    @Inject(method = {"startTcpServerListener", "method_14354", "m_9711_"}, at = @At(value = "TAIL"), require = 0)
     private void interceptGroup(InetAddress inetAddress, int i, CallbackInfo ci) {
         boolean realE4mcInstalled = false;
         try {

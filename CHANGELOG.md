@@ -1,6 +1,12 @@
 # Changelog
 
-### 2.0.0-beta.2 (upstream port: e4mc 6.2.1)
+## 2.0.0-beta.3
+
+### New Features & Compatibility
+* Ported `e4all` to support Minecraft `26.3-snapshot-9` for Fabric and NeoForge.
+* Fixed really bad bugs.
+
+## 2.0.0-beta.2 (upstream port: e4mc 6.2.1)
 
 ### Upstream Port
  * Ported changes from upstream e4mc 6.1.1 through 6.2.1
@@ -10,16 +16,7 @@
 
 ### 2.0.0-beta
 
-### New Feature
- * Host Permission Management (WIP):
-   * When cheats are enabled, only the host receives OP status by default.
-   * Hosts can manage other players using standard /op and /deop commands.
-   * Offline/Cracked Mode Verification: OPs are assigned a secret key to authenticate upon rejoining and prevent impersonation.
-   * If a key is lost, the host can choose to:
-     1. *Kick the player*
-     2. *Keep OP rights*
-     3. *Revoke OP rights*
-###  Fixes
+### Fixes
  * SVC (Simple Voice Chat): Ongoing bug fixes (WIP).
  * Xaero's Mods: Fixed compatibility issues with Xaero's Minimap and WorldMap (WIP).
 

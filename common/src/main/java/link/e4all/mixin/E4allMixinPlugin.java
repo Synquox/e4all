@@ -41,9 +41,7 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        if (mixinClassName.endsWith("PlayerListCookieMixin")
-                || mixinClassName.endsWith("ClientCommonPacketListenerImplMixin")
-                || mixinClassName.endsWith("ServerCommonPacketListenerImplMixin")) {
+        if (mixinClassName.endsWith("PlayerListCookieMixin")) {
             return HAS_COMMON_LISTENER_COOKIE;
         }
         if (mixinClassName.endsWith("PlayerListLegacyMixin")) {
@@ -51,16 +49,9 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         }
 
         if (mixinClassName.contains(".ncr.")) {
-            if (!HAS_SIGNATURES) {
-                return false;
-            }
-            if (targetClassName != null && !targetClassName.isEmpty()) {
-                String resourcePath = targetClassName.replace('.', '/') + ".class";
-                if (this.getClass().getClassLoader().getResource(resourcePath) == null) {
-                    return false;
-                }
-            }
+            return HAS_SIGNATURES;
         }
+
         return true;
     }
 

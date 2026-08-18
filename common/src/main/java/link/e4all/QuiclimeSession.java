@@ -22,7 +22,10 @@ import link.e4all.dialtone.DialtoneAddress;
 import link.e4all.dialtone.DialtoneServerChannel;
 import link.e4mc.iroh.Endpoint;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.Style;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -413,33 +416,42 @@ public class QuiclimeSession {
                                         assignedDomain = domain;
                                         LOGGER.info("Domain assigned: {}", domain);
                                         if (Agnos.isClient()) {
-                                            Component domainComponent = Mirror.literal(domain);
-                                            if (Config.INSTANCE.hideDomainInChat.value()) {
-                                                domainComponent = Mirror.translatable("text.e4all_minecraft.hiddenDomain");
-                                            }
-                                            Component message = Mirror.append(Mirror.translatable(
-                                                    "text.e4all_minecraft.domainAssigned",
-                                                    Mirror.withStyle(domainComponent, it ->
-                                                    it
-                                                            .withClickEvent(Mirror.copyToClipboard(domain))
-                                                            .withColor(ChatFormatting.GREEN)
-                                                            .withHoverEvent(Mirror.showText(Mirror.translatable("chat.copy.click"))))
-                                            ),
-                                                    Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.clickToStop"), it ->
-                                                            it
-                                                                    .withClickEvent(Mirror.runCommand("/e4all stop"))
-                                                                    .withColor(ChatFormatting.GRAY)
-                                                    )
-                                            );
-                                            Mirror.addMessage(message);
-                                            if (E4allClient.badurl) {
-                                                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.poisonpill.badurl"));
-                                            }
-                                            // show offline warning on lan open
-                                            if (Config.INSTANCE.offlineMode.value()) {
-                                                Config.INSTANCE.offlineWarningShown.setValue(true, true);
-                                                LOGGER.warn("e4all: Offline mode enabled, mojang auth is disabled for this session.");
-                                                Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
+                                            try {
+                                                Component domainComponent = Mirror.literal(domain);
+                                                if (Config.INSTANCE.hideDomainInChat.value()) {
+                                                    domainComponent = Mirror.translatable("text.e4all_minecraft.hiddenDomain");
+                                                }
+                                                ClickEvent copyEvent = Mirror.copyToClipboard(domain);
+                                                HoverEvent hoverEvent = Mirror.showText(Mirror.translatable("chat.copy.click"));
+                                                Component styledDomain = Mirror.withStyle(domainComponent, it -> {
+                                                    Style s = it.withColor(ChatFormatting.GREEN);
+                                                    if (copyEvent != null) s = s.withClickEvent(copyEvent);
+                                                    if (hoverEvent != null) s = s.withHoverEvent(hoverEvent);
+                                                    return s;
+                                                });
+                                                ClickEvent stopEvent = Mirror.runCommand("/e4all stop");
+                                                Component styledStop = Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.clickToStop"), it -> {
+                                                    Style s = it.withColor(ChatFormatting.GRAY);
+                                                    if (stopEvent != null) s = s.withClickEvent(stopEvent);
+                                                    return s;
+                                                });
+                                                Component message = Mirror.append(
+                                                        Mirror.translatable("text.e4all_minecraft.domainAssigned", styledDomain),
+                                                        styledStop
+                                                );
+                                                Mirror.addMessage(message);
+                                                if (E4allClient.badurl) {
+                                                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.poisonpill.badurl"));
+                                                }
+                                                // show offline warning on lan open
+                                                if (Config.INSTANCE.offlineMode.value()) {
+                                                    Config.INSTANCE.offlineWarningShown.setValue(true, true);
+                                                    LOGGER.warn("e4all: Offline mode enabled, mojang auth is disabled for this session.");
+                                                    Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
+                                                }
+                                            } catch (Throwable t) {
+                                                LOGGER.error("Failed to format or send domain assigned message", t);
+                                                Mirror.addMessage(Mirror.literal("e4all: Domain assigned: " + domain));
                                             }
                                         }
                                     }

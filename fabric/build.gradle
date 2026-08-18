@@ -51,6 +51,7 @@ shadowJar {
 }
 
 remapJar {
+    enabled = true
     injectAccessWidener = true
     input.set shadowJar.archiveFile
     dependsOn shadowJar
@@ -171,7 +172,7 @@ publishMods {
         projectId = project.findProperty("curseforgeId") ?: ""
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
-                "26.1", "26.2"
+                "26.1", "26.2", "26.3-snapshot-9"
         )
 
         requires {
@@ -189,7 +190,7 @@ publishMods {
         file = modernRemapJar.archiveFile
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
-                "26.1", "26.2"
+                "26.1", "26.2", "26.3-snapshot-9"
         )
 
         requires {

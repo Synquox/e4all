@@ -1,19 +1,17 @@
 package link.e4all.mixin;
 
-import com.mojang.authlib.GameProfile;
 import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.Mirror;
-import link.e4all.OpSessionManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.server.players.UserBanList;
 import net.minecraft.server.players.UserWhiteList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -29,7 +27,7 @@ public abstract class PlayerListMixin {
 
     @Shadow public abstract MinecraftServer getServer();
 
-    @Inject(method = "/^<init>$/", at = @At("TAIL"), require = 0)
+    @Inject(method = "<init>", at = @At("TAIL"), require = 0)
     void injectListLoads(CallbackInfo ci) {
         if (Config.INSTANCE.restoreDedicatedCommands.value()) {
             try {
@@ -50,8 +48,8 @@ public abstract class PlayerListMixin {
         }
     }
 
-    @Inject(method = "canPlayerLogin", at = @At("HEAD"), cancellable = true, require = 0)
-    public void allowOwnerLogin(SocketAddress socketAddress, GameProfile gameProfile, CallbackInfoReturnable<Component> cir) {
+    @Inject(method = {"canPlayerLogin", "method_14586", "m_6418_", "checkCanJoin"}, at = @At("HEAD"), cancellable = true, require = 0)
+    public void allowOwnerLogin(SocketAddress socketAddress, @Coerce Object gameProfile, CallbackInfoReturnable<Component> cir) {
         if (socketAddress == null) {
             cir.setReturnValue(null);
             return;
@@ -61,34 +59,6 @@ public abstract class PlayerListMixin {
                 cir.setReturnValue(null);
             }
         } catch (RuntimeException ignored) {}
-    }
-
-    @Inject(method = "remove", at = @At("TAIL"), require = 0)
-    private void e4all$finishOpVerification(ServerPlayer player, CallbackInfo ci) {
-        OpSessionManager.onPlayerDisconnected(getServer(), player);
-    }
-
-    @Inject(method = "isOp", at = @At("HEAD"), cancellable = true, require = 0)
-    private void e4all$hideUnverifiedOp(GameProfile profile, CallbackInfoReturnable<Boolean> cir) {
-        Boolean overridden = OpSessionManager.getOpOverride(getServer(), profile);
-        if (overridden != null) {
-            cir.setReturnValue(overridden);
-        }
-    }
-
-    @Inject(method = "op", at = @At("TAIL"), require = 0)
-    private void e4all$createOpSession(GameProfile profile, CallbackInfo ci) {
-        OpSessionManager.onOpGranted(getServer(), profile);
-    }
-
-    @Inject(method = "deop", at = @At("TAIL"), require = 0)
-    private void e4all$removeOpSession(GameProfile profile, CallbackInfo ci) {
-        OpSessionManager.onDeop(getServer(), profile);
-    }
-
-    @Inject(method = "tick", at = @At("TAIL"), require = 0)
-    private void e4all$tickOpVerification(CallbackInfo ci) {
-        OpSessionManager.tick(getServer());
     }
 }
 

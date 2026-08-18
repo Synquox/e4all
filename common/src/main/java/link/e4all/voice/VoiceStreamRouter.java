@@ -40,12 +40,18 @@ public class VoiceStreamRouter extends ByteToMessageDecoder {
             pipeline.addLast("voiceHandler",
                     new VoiceStreamHandler(VoiceConnectionManager.INSTANCE));
 
+            if (ctx.channel().isActive()) {
+                pipeline.fireChannelActive();
+            }
             pipeline.remove(this);
         } else {
             E4allClient.LOGGER.debug("Non-voice stream detected (first byte 0x{}). Passing to Minecraft handler.",
                     Integer.toHexString(magic & 0xFF));
 
             pipeline.addLast(minecraftHandler);
+            if (ctx.channel().isActive()) {
+                pipeline.fireChannelActive();
+            }
             pipeline.remove(this);
         }
     }
