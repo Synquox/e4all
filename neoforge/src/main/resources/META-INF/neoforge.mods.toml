@@ -9,7 +9,7 @@ displayName = "e4all"
 logoFile = "e4all_icon.png"
 credits = "skyevg (Original e4mc infrastructure)"
 authors = "JustPixel"
-description = "Open a LAN server to anyone, anywhere, anytime. Enhanced with Online/Offline Mode support."
+description = "The e4mc fork that lets anyone join your LAN world from anywhere, even with offline accounts."
 
 [[mixins]]
 config = "e4all.mixins.json"

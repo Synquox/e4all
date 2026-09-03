@@ -7,10 +7,16 @@
   "mixins": [
     "BanListCommandsMixin",
     "BanPlayerCommandsMixin",
+    "ClientboundCustomPayloadPacketMixin",
+    "CustomPayloadDispatchCodecMixin",
     "ConnectionMixin",
+    "DiscardedPayloadMixin",
+    "IdDispatchCodecMixin",
     "MinecraftServerMixin",
     "PardonCommandMixin",
+    "ServerboundCustomPayloadPacketMixin",
     "ServerboundKeyPacketMixin",
+    "ServerCommonPacketListenerImplMixin",
     "ServerConnectionListenerMixin",
     "ServerLoginPacketListenerImplMixin",
     "WhitelistCommandMixin",
@@ -20,13 +26,13 @@
     "ncr.MixinServerboundChatPacket",
     "ncr.MixinServerboundChatSessionUpdatePacket",
     "PlayerListMixin",
-    "PlayerListLegacyMixin",
-    "PlayerListCookieMixin"
+    "ServerGamePacketListenerImplMixin"
   ],
   "injectors": {
     "defaultRequire": 0
   },
   "client": [
+    "ClientCommonPacketListenerImplMixin",
     "ClientHandshakePacketListenerImplMixin",
     "MultiplayerOptionsScreenMixin",
     "ServerAddressMixin",

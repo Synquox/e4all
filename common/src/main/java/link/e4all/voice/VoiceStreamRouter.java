@@ -22,16 +22,30 @@ public class VoiceStreamRouter extends ByteToMessageDecoder {
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         if (routed) return;
-        if (in.readableBytes() < 1) return;
+        if (in.readableBytes() < VoiceFraming.HEADER_LEN) return;
 
         routed = true;
-        byte magic = in.getByte(in.readerIndex());
+
+        byte[] head = new byte[VoiceFraming.HEADER_LEN];
+        in.getBytes(in.readerIndex(), head);
 
         ChannelPipeline pipeline = ctx.pipeline();
 
-        if (magic == VoiceFraming.VOICE_MAGIC) {
-            in.readByte();
-            E4allClient.LOGGER.info("Voice stream detected (magic 0xE4). Installing voice pipeline.");
+        if (VoiceFraming.matchesMagic(head, head.length)) {
+            byte version = head[VoiceFraming.MAGIC.length];
+            if (version != VoiceFraming.VERSION) {
+                byte[] hex = new byte[Math.min(16, in.readableBytes())];
+                in.getBytes(in.readerIndex(), hex);
+                E4allClient.LOGGER.warn("e4all voice: voice protocol version mismatch (stream says 0x{}, we speak 0x{}), first bytes: {} - closing",
+                        Integer.toHexString(version & 0xFF), Integer.toHexString(VoiceFraming.VERSION & 0xFF),
+                        VoiceFraming.toHex(hex, 16));
+                ctx.close();
+                return;
+            }
+
+            in.skipBytes(VoiceFraming.HEADER_LEN);
+            E4allClient.LOGGER.info("e4all voice: voice stream detected (magic E4V1 v{}), installing voice pipeline",
+                    Integer.toHexString(VoiceFraming.VERSION & 0xFF));
 
             pipeline.addLast("voiceFrameDecoder",
                     new LengthFieldBasedFrameDecoder(65535, 0, 2, 0, 2));
@@ -45,8 +59,8 @@ public class VoiceStreamRouter extends ByteToMessageDecoder {
             }
             pipeline.remove(this);
         } else {
-            E4allClient.LOGGER.debug("Non-voice stream detected (first byte 0x{}). Passing to Minecraft handler.",
-                    Integer.toHexString(magic & 0xFF));
+            E4allClient.LOGGER.debug("e4all voice: game stream detected (first bytes {}), passing to minecraft handler byte-intact",
+                    VoiceFraming.toHex(head, 4));
 
             pipeline.addLast(minecraftHandler);
             if (ctx.channel().isActive()) {

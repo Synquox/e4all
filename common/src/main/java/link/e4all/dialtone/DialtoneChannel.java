@@ -5,6 +5,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.util.internal.StringUtil;
 import link.e4all.E4allClient;
+import link.e4all.voice.VoiceEndpointStack;
 import link.e4mc.iroh.Connection;
 import link.e4mc.iroh.Endpoint;
 import link.e4mc.iroh.Stream;
@@ -16,6 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DialtoneChannel extends AbstractChannel {
     private static final ChannelMetadata METADATA = new ChannelMetadata(false);
+    private static final int COALESCE_THRESHOLD = 2048;
+    private static final int MAX_COALESCE_BYTES = 32 * 1024;
     private final ChannelConfig config = new DefaultChannelConfig(this);
     Endpoint endpoint;
     Connection connection;
@@ -106,9 +109,10 @@ public class DialtoneChannel extends AbstractChannel {
             // All pipeline events must be fired on the event loop thread.
             // The iroh CompletableFuture may complete on a native thread.
             eventLoop().execute(() -> {
-                if (arr == null) {
+                if (arr == null || arr.length == 0) {
                     if (!closed) {
-                        doClose();
+                        // EOF: use close() so channelInactive fires and handlers can deregister
+                        close();
                     }
                     return;
                 }
@@ -164,6 +168,13 @@ public class DialtoneChannel extends AbstractChannel {
             buf = candidate;
             break;
         }
+
+        // small packets: one native write + thread hop each serializes the stream, so coalesce
+        if (buf.readableBytes() <= COALESCE_THRESHOLD && coalesceAndWrite(in)) {
+            return;
+        }
+
+        // single-message path (original behavior)
         ByteBuffer byteBuffer = null;
         try {
             byteBuffer = buf.nioBuffer();
@@ -211,6 +222,54 @@ public class DialtoneChannel extends AbstractChannel {
         }
     }
 
+    private boolean coalesceAndWrite(ChannelOutboundBuffer in) {
+        ByteBuf agg = Unpooled.buffer(1024, MAX_COALESCE_BYTES);
+        int batched = 0;
+        try {
+            while (true) {
+                Object msg = in.current();
+                if (!(msg instanceof ByteBuf candidate) || !candidate.isReadable()) {
+                    break; // non-ByteBuf or empty: handled next round
+                }
+                if (batched > 0 && candidate.readableBytes() > agg.maxWritableBytes()) {
+                    break; // won't fit: leave for the next batch
+                }
+                agg.writeBytes(candidate);
+                in.remove();
+                batched++;
+            }
+        } catch (Throwable t) {
+            agg.release();
+            writeFailed(t);
+            return true;
+        }
+        if (batched == 0) {
+            agg.release();
+            return false;
+        }
+        byte[] arr = new byte[agg.readableBytes()];
+        agg.getBytes(agg.readerIndex(), arr);
+        agg.release();
+        try {
+            stream.writeIrohStreamByteArray(arr, 0, arr.length).thenAccept(nothing -> {
+                eventLoop().execute(() -> doWriteNext(in));
+            }).exceptionally(t -> {
+                eventLoop().execute(() -> writeFailed(t));
+                return null;
+            });
+        } catch (Throwable e) {
+            writeFailed(e);
+        }
+        return true;
+    }
+
+    private void writeFailed(Throwable t) {
+        writeInFlight.set(false);
+        if (!closed) {
+            pipeline().fireExceptionCaught(t);
+        }
+    }
+
     @Override
     public ChannelConfig config() {
         return config;
@@ -240,13 +299,17 @@ public class DialtoneChannel extends AbstractChannel {
 
             try {
                 if (remoteAddress instanceof DialtoneAddress dialtoneAddress) {
-                    if (DialtoneAmbientSession.INSTANCE.endpoint == null) {
-                        DialtoneAmbientSession.INSTANCE.start();
+                    // voice uses the dedicated relay-less endpoint, so voice stays direct
+                    if (DialtoneAddress.VOICE_ALPN.equals(dialtoneAddress.alpn)) {
+                        endpoint = VoiceEndpointStack.INSTANCE.getOrCreate();
+                    } else {
+                        if (DialtoneAmbientSession.INSTANCE.endpoint == null) {
+                            DialtoneAmbientSession.INSTANCE.start();
+                        }
+                        endpoint = DialtoneAmbientSession.INSTANCE.endpoint;
                     }
-                    endpoint = DialtoneAmbientSession.INSTANCE.endpoint;
-                    DialtoneAmbientSession.INSTANCE
-                            .endpoint
-                            .connect(dialtoneAddress.actualAddress, "e4mc-dialtone".getBytes(StandardCharsets.UTF_8))
+                    endpoint
+                            .connect(dialtoneAddress.actualAddress, dialtoneAddress.alpn.getBytes(StandardCharsets.UTF_8))
                             .thenAccept(conn -> {
                                 connection = conn;
                                 conn.openBi().thenAccept(bidi -> {

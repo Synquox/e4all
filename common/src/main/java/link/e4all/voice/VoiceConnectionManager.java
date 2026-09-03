@@ -13,6 +13,7 @@ public final class VoiceConnectionManager {
     public static final VoiceConnectionManager INSTANCE = new VoiceConnectionManager();
     private final ConcurrentHashMap<UUID, Channel> streams = new ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicReference<VoicePacketConsumer> packetConsumer = new java.util.concurrent.atomic.AtomicReference<>(null);
+    private volatile long lastDropWarnMs = 0L;
 
     @FunctionalInterface
     public interface VoicePacketConsumer {
@@ -39,8 +40,13 @@ public final class VoiceConnectionManager {
         E4allClient.LOGGER.info("Registered voice stream for player {}", uuid);
     }
 
-    public void removeStream(UUID uuid) {
-        streams.remove(uuid);
+    public void removeStream(UUID uuid, Channel channel) {
+        if (uuid == null || channel == null) return;
+        // identity-guarded: a replaced stream's old channel must not unregister the new one
+        if (!streams.remove(uuid, channel)) {
+            E4allClient.LOGGER.debug("Voice stream for player {} was already replaced; keeping current mapping", uuid);
+            return;
+        }
         E4allClient.LOGGER.info("Removed voice stream for player {}", uuid);
     }
 
@@ -50,7 +56,18 @@ public final class VoiceConnectionManager {
             ByteBuf buf = channel.alloc().buffer(1 + data.length);
             buf.writeByte(VoiceFraming.MSG_VOICE_DATA);
             buf.writeBytes(data);
-            channel.writeAndFlush(buf);
+            channel.writeAndFlush(buf).addListener(f -> {
+                if (!f.isSuccess()) {
+                    E4allClient.LOGGER.warn("e4all voice: failed to write voice data to player {}: {}", uuid, f.cause());
+                }
+            });
+        } else {
+            long now = System.currentTimeMillis();
+            if (now - lastDropWarnMs > 5_000L) {
+                lastDropWarnMs = now;
+                E4allClient.LOGGER.warn("e4all voice: cannot send voice packet to player {}: stream is null or inactive (registered streams: {})",
+                        uuid, streams.keySet());
+            }
         }
     }
 

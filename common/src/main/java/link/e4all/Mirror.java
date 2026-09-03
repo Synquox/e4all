@@ -77,6 +77,12 @@ public class Mirror {
             "net.minecraft.class_2558$class_10606"
     };
 
+    private static final String[] OPENURL_CLASS_NAMES = {
+            "net.minecraft.text.ClickEvent$OpenUrl", // yarn
+            "net.minecraft.network.chat.ClickEvent$OpenUrl",
+            "net.minecraft.class_2558$class_10605"
+    };
+
     private static final String[] SHOWTEXT_CLASS_NAMES = {
             "net.minecraft.text.HoverEvent$ShowText", // yarn
             "net.minecraft.network.chat.HoverEvent$ShowText",
@@ -162,6 +168,35 @@ public class Mirror {
             Object action = field.get(null);
             Constructor<?> constructor = ClickEvent.class.getConstructor(actionClass, String.class);
             return (ClickEvent) constructor.newInstance(action, text);
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    public static ClickEvent openUrlEvent(String url) {
+        try {
+            return new ClickEvent(ClickEvent.Action.OPEN_URL, url);
+        } catch (Throwable ignored) {}
+        // Modern MC (1.21.5+): ClickEvent is a sealed interface with subclasses,
+        // e.g. ClickEvent.OpenUrl(URI). Build it reflectively across mappings.
+        for (String className : OPENURL_CLASS_NAMES) {
+            try {
+                Class<?> clazz = Class.forName(className);
+                try {
+                    Constructor<?> constructor = clazz.getConstructor(java.net.URI.class);
+                    return (ClickEvent) constructor.newInstance(new java.net.URI(url));
+                } catch (NoSuchMethodException ignored) {}
+                try {
+                    Constructor<?> constructor = clazz.getConstructor(String.class);
+                    return (ClickEvent) constructor.newInstance(url);
+                } catch (NoSuchMethodException ignored) {}
+            } catch (Throwable ignored) {}
+        }
+        try {
+            Class<?> actionClass = Class.forName("net.minecraft.network.chat.ClickEvent$Action");
+            Field field = actionClass.getField("OPEN_URL");
+            Object action = field.get(null);
+            Constructor<?> constructor = ClickEvent.class.getConstructor(actionClass, String.class);
+            return (ClickEvent) constructor.newInstance(action, url);
         } catch (Throwable ignored) {}
         return null;
     }

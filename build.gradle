@@ -15,6 +15,102 @@ subprojects {
         silentMojangMappingsLicense()
     }
 
+    // bundle android natives and netty dns into the -android jar variant
+    tasks.matching { it.name == "build" }.configureEach {
+        finalizedBy "packageAndroidNatives"
+    }
+
+    tasks.register("packageAndroidNatives") {
+        group = "build"
+        description = "Removes Android Bionic natives and netty dns classes from release jars and produces -android variants with them bundled."
+        def projectName = project.name
+        def libsDir = project.layout.buildDirectory.dir("libs").get().asFile
+        doLast {
+            // The common project's jars are Loom intermediates consumed by the platform
+            // builds - never touch them.
+            if (projectName == "common") return
+            if (!libsDir.isDirectory()) return
+            def nativesRoot = rootProject.file("common/src/main/resources/assets/e4all/natives")
+            def releaseJars = libsDir.listFiles().findAll { it.name.endsWith(".jar") &&
+                    !(it.name ==~ /.*(dev|sources|shadow|slim|android).*\.jar/) }
+            // entries that are only ever needed on Android: Bionic natives + netty dns
+            def androidOnlyPrefixes = ["assets/e4all/natives/android-", "io/netty/resolver/dns/", "io/netty/handler/codec/dns/"]
+            def newestNative = 0L
+            nativesRoot.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                newestNative = Math.max(newestNative, f.lastModified())
+            }
+            def hasAndroidOnlyEntries = { File f ->
+                def zf = new java.util.zip.ZipFile(f)
+                try {
+                    def entries = zf.entries()
+                    while (entries.hasMoreElements()) {
+                        def name = entries.nextElement().name
+                        if (androidOnlyPrefixes.any { name.startsWith(it) }) return true
+                    }
+                    return false
+                } finally {
+                    zf.close()
+                }
+            }
+            releaseJars.each { jar ->
+                def base = jar.name[0..-5]
+                def androidJar = new File(libsDir, base + "-android.jar")
+                def tmp = new File(libsDir, base + ".tmp.jar")
+                def tmpAndroid = new File(libsDir, base + ".tmp-android.jar")
+
+                // Skip jars that were already processed: the release jar carries none of
+                // the android-only entries and the -android variant is newer than both
+                // the jar and the natives on disk.
+                if (!hasAndroidOnlyEntries(jar) && androidJar.exists() &&
+                        androidJar.lastModified() >= jar.lastModified() &&
+                        androidJar.lastModified() >= newestNative) {
+                    println("e4all: skipping " + jar.name + " (already slim, -android variant up to date)")
+                    return
+                }
+
+                // Release jar: repack without the Android-only entries (no-op if already slim).
+                def zin = new java.util.zip.ZipFile(jar)
+                def zout = new java.util.zip.ZipOutputStream(new FileOutputStream(tmp))
+                // -android variant: keeps everything except the Android natives (so the
+                // netty dns classes stay in), plus only aarch64 natives
+                // (x86_64 Android is emulator-only; those stay in the repo resources)
+                def aout = new java.util.zip.ZipOutputStream(new FileOutputStream(tmpAndroid))
+                zin.entries().each { entry ->
+                    if (!entry.name.startsWith("assets/e4all/natives/android-")) {
+                        aout.putNextEntry(new java.util.zip.ZipEntry(entry.name))
+                        if (!entry.isDirectory()) {
+                            zin.getInputStream(entry).withCloseable { aout << it }
+                        }
+                        aout.closeEntry()
+                    }
+                    def androidOnlyEntry = entry.name.startsWith("assets/e4all/natives/android-") ||
+                            androidOnlyPrefixes.any { entry.name.startsWith(it) }
+                    if (!androidOnlyEntry) {
+                        zout.putNextEntry(new java.util.zip.ZipEntry(entry.name))
+                        if (!entry.isDirectory()) {
+                            zin.getInputStream(entry).withCloseable { zout << it }
+                        }
+                        zout.closeEntry()
+                    }
+                }
+                nativesRoot.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                    def rel = "assets/e4all/natives/" + nativesRoot.toPath().relativize(f.toPath()).toString().replace("\\", "/")
+                    if (rel.contains("/android-aarch64/")) {
+                        aout.putNextEntry(new java.util.zip.ZipEntry(rel))
+                        f.withInputStream { aout << it }
+                        aout.closeEntry()
+                    }
+                }
+                zin.close()
+                zout.close()
+                aout.close()
+                java.nio.file.Files.move(tmp.toPath(), jar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                java.nio.file.Files.move(new File(libsDir, base + ".tmp-android.jar").toPath(), androidJar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                println("e4all: slimmed " + jar.name + "; produced " + androidJar.name + " (natives + dns bundled)")
+            }
+        }
+    }
+
     dependencies {
         minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
         // The following line declares the mojmap mappings, you may use other mappings as well
@@ -46,10 +142,10 @@ allprojects {
         flatDir {
             dirs("../libs")
         }
-        maven { url "https://maven.neoforged.net/releases/" }
-        maven { url 'https://repo.sleeping.town/' }
-        maven { url 'https://maven.is-quite.gay/' }
-        maven { url "https://maven.maxhenkel.de/repository/public" }
+        maven { url = "https://maven.neoforged.net/releases/" }
+        maven { url = 'https://repo.sleeping.town/' }
+        maven { url = 'https://maven.is-quite.gay/' }
+        maven { url = "https://maven.maxhenkel.de/repository/public" }
     }
 
     tasks.withType(JavaCompile) {
@@ -77,7 +173,7 @@ ext.getLatestChangelog = {
 }
 
 tasks.register("viewLatestChangelog") {
-    group "documentation"
+    group = "documentation"
     description "Print the topmost single version section from the full CHANGELOG.md file."
     doLast {
         println(getLatestChangelog())

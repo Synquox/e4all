@@ -9,6 +9,9 @@ import java.util.Set;
 public class E4allMixinPlugin implements IMixinConfigPlugin {
     private static final boolean HAS_SIGNATURES;
     private static final boolean HAS_COMMON_LISTENER_COOKIE;
+    private static final boolean HAS_MULTIPLAYER_OPTIONS_SCREEN;
+    private static final boolean HAS_SHARE_TO_LAN_SCREEN;
+    private static final boolean HAS_WORLD_OPTIONS_SCREEN;
     static {
         boolean hasSignatures = false;
         try {
@@ -29,6 +32,17 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         } catch (Throwable ignored) {
         }
         HAS_COMMON_LISTENER_COOKIE = hasCookie;
+
+        ClassLoader cl = E4allMixinPlugin.class.getClassLoader();
+        HAS_MULTIPLAYER_OPTIONS_SCREEN =
+                cl.getResource("net/minecraft/client/gui/screens/MultiplayerOptionsScreen.class") != null
+             || cl.getResource("net/minecraft/client/gui/screens/options/MultiplayerOptionsScreen.class") != null;
+        HAS_SHARE_TO_LAN_SCREEN =
+                cl.getResource("net/minecraft/client/gui/screens/ShareToLanScreen.class") != null
+             || cl.getResource("net/minecraft/class_527.class") != null;
+        HAS_WORLD_OPTIONS_SCREEN =
+                cl.getResource("net/minecraft/client/gui/screens/WorldOptionsScreen.class") != null
+             || cl.getResource("net/minecraft/client/gui/screens/options/WorldOptionsScreen.class") != null;
     }
 
     @Override
@@ -50,6 +64,16 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
 
         if (mixinClassName.contains(".ncr.")) {
             return HAS_SIGNATURES;
+        }
+
+        if (mixinClassName.endsWith("MultiplayerOptionsScreenMixin")) {
+            return HAS_MULTIPLAYER_OPTIONS_SCREEN;
+        }
+        if (mixinClassName.endsWith("ShareToLanScreenMixin")) {
+            return HAS_SHARE_TO_LAN_SCREEN;
+        }
+        if (mixinClassName.endsWith("WorldOptionsScreenMixin")) {
+            return HAS_WORLD_OPTIONS_SCREEN;
         }
 
         return true;

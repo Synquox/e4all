@@ -10,7 +10,7 @@ logoFile = "e4all_icon.png"
 credits = "skyevg (original e4mc)"
 authors = "JustPixel"
 description = '''
-Open a LAN server to anyone, anywhere, anytime. Fork of e4mc with Offline Mode support.
+The e4mc fork that lets anyone join your LAN world from anywhere, even with offline accounts.
 '''
 
 [[dependencies.e4all]]

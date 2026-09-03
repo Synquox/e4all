@@ -2,6 +2,7 @@ package link.e4all;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import link.e4all.voice.VoiceControlPayload;
 import net.minecraft.network.Connection;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
@@ -41,6 +42,12 @@ public final class PacketHelper {
             "net.minecraft.network.protocol.common.custom.CustomPacketPayload",
             "net.minecraft.network.packet.CustomPayload",
             "net.minecraft.class_8710"
+    };
+
+    private static final String[] TYPE_CLASS_NAMES = {
+            "net.minecraft.network.protocol.common.custom.CustomPacketPayload$Type",
+            "net.minecraft.network.protocol.common.custom.CustomPacketPayload$Id",
+            "net.minecraft.class_8710$class_9154"
     };
 
     private static final String[] DISCARDED_PAYLOAD_CLASS_NAMES = {
@@ -151,14 +158,28 @@ public final class PacketHelper {
 
     public static Object createCustomPayloadType(Object channel) {
         if (channel == null) return null;
+        if (VoiceControlPayload.isOwnChannel(channel)) {
+            Object registered = VoiceControlPayload.getRegisteredType();
+            if (registered != null) return registered;
+        }
         Class<?> payloadClass = findClass(PAYLOAD_INTERFACE_NAMES);
         if (payloadClass == null) return null;
-        Class<?> typeClass = null;
-        for (Class<?> inner : payloadClass.getDeclaredClasses()) {
-            String simpleName = inner.getSimpleName();
-            if ("Type".equals(simpleName) || "Id".equals(simpleName)) {
-                typeClass = inner;
-                break;
+        Class<?> typeClass = findClass(TYPE_CLASS_NAMES);
+        if (typeClass == null) {
+            for (Class<?> inner : payloadClass.getDeclaredClasses()) {
+                String simpleName = inner.getSimpleName();
+                if ("Type".equals(simpleName) || "Id".equals(simpleName) || "class_9154".equals(simpleName)) {
+                    typeClass = inner;
+                    break;
+                }
+                for (Constructor<?> c : inner.getDeclaredConstructors()) {
+                    Class<?>[] p = c.getParameterTypes();
+                    if (p.length == 1 && isResourceLoc(p[0])) {
+                        typeClass = inner;
+                        break;
+                    }
+                }
+                if (typeClass != null) break;
             }
         }
         if (typeClass != null) {
@@ -221,7 +242,7 @@ public final class PacketHelper {
                         Object codecObj = f.get(null);
                         if (codecObj != null) {
                             for (Method cm : codecObj.getClass().getMethods()) {
-                                if (cm.getParameterCount() == 2) {
+                                if (cm.getParameterCount() == 2 && cm.getName().equals("encode")) {
                                     try {
                                         cm.setAccessible(true);
                                         cm.invoke(codecObj, testBuf, pkt);
@@ -300,7 +321,7 @@ public final class PacketHelper {
             if (pkt != null) {
                 if (!testEncode(pkt)) {
                     LOGGER.debug("e4all: payload {} cannot be encoded by server packet codec; skipping", channel);
-                    return;
+                    if (!VoiceControlPayload.isOwnChannel(channel)) return;
                 }
                 player.connection.send(pkt);
             }
@@ -309,13 +330,13 @@ public final class PacketHelper {
         }
     }
 
-    public static void sendServerbound(Connection connection, Object channel) {
+    public static void sendServerbound(Connection connection, Object channel, byte[] data) {
         try {
-            Packet<?> pkt = makePacket(false, channel, new byte[0]);
+            Packet<?> pkt = makePacket(false, channel, data);
             if (pkt != null) {
                 if (!testEncode(pkt)) {
                     LOGGER.debug("e4all: payload {} cannot be encoded by client packet codec; skipping", channel);
-                    return;
+                    if (!VoiceControlPayload.isOwnChannel(channel)) return;
                 }
                 connection.send(pkt);
             }
@@ -340,7 +361,7 @@ public final class PacketHelper {
                     } else if (ByteBuf.class.isAssignableFrom(p[1]) || FriendlyByteBuf.class.isAssignableFrom(p[1])) {
                         return ctor.newInstance(channel, Unpooled.wrappedBuffer(payloadData));
                     }
-                } else if (p.length == 1 && isResourceLoc(p[0])) {
+                } else if (p.length == 1 && isResourceLoc(p[0]) && payloadData.length == 0) {
                     return ctor.newInstance(channel);
                 }
             } catch (Throwable t) {
@@ -362,30 +383,7 @@ public final class PacketHelper {
         Class<?> plaCls = findClass(PAYLOAD_INTERFACE_NAMES);
         byte[] payloadData = data != null ? data : new byte[0];
 
-        // try discarded payload
-        Object discarded = makeDiscardedPayload(channel, payloadData);
-        if (discarded != null) {
-            for (Constructor<?> ctor : pktCls.getDeclaredConstructors()) {
-                try {
-                    ctor.setAccessible(true);
-                    Class<?>[] p = ctor.getParameterTypes();
-                    if (p.length == 1 && p[0].isAssignableFrom(discarded.getClass())) {
-                        return (Packet<?>) ctor.newInstance(discarded);
-                    }
-                } catch (Throwable t) {
-                    LOGGER.debug("Failed constructing packet with discarded payload", t);
-                }
-            }
-            if (plaCls != null) {
-                try {
-                    Constructor<?> ctor = pktCls.getDeclaredConstructor(plaCls);
-                    ctor.setAccessible(true);
-                    return (Packet<?>) ctor.newInstance(discarded);
-                } catch (Throwable ignored) {}
-            }
-        }
-
-        // try proxy payload
+        // try proxy payload first
         if (plaCls != null) {
             try {
                 Object payload = makePayload(plaCls, channel, payloadData);
@@ -402,6 +400,31 @@ public final class PacketHelper {
                 }
             } catch (Throwable t) {
                 LOGGER.warn("e4all: 1.20.2+ proxy payload construction failed for {}", channel, t);
+            }
+        }
+
+        // try discarded payload (only for non-own channels, discarded payloads are rejected C2S)
+        if (!VoiceControlPayload.isOwnChannel(channel)) {
+            Object discarded = makeDiscardedPayload(channel, payloadData);
+            if (discarded != null) {
+                for (Constructor<?> ctor : pktCls.getDeclaredConstructors()) {
+                    try {
+                        ctor.setAccessible(true);
+                        Class<?>[] p = ctor.getParameterTypes();
+                        if (p.length == 1 && p[0].isAssignableFrom(discarded.getClass())) {
+                            return (Packet<?>) ctor.newInstance(discarded);
+                        }
+                    } catch (Throwable t) {
+                        LOGGER.debug("Failed constructing packet with discarded payload", t);
+                    }
+                }
+                if (plaCls != null) {
+                    try {
+                        Constructor<?> ctor = pktCls.getDeclaredConstructor(plaCls);
+                        ctor.setAccessible(true);
+                        return (Packet<?>) ctor.newInstance(discarded);
+                    } catch (Throwable ignored) {}
+                }
             }
         }
 
@@ -441,70 +464,34 @@ public final class PacketHelper {
 
     private static Object makePayload(Class<?> payloadClass, Object channel, byte[] data)
             throws Throwable {
-        Class<?> typeClass = null;
-        for (Class<?> inner : payloadClass.getDeclaredClasses()) {
-            String simpleName = inner.getSimpleName();
-            if ("Type".equals(simpleName) || "Id".equals(simpleName)) {
-                typeClass = inner;
-                break;
-            }
+        if (VoiceControlPayload.isOwnChannel(channel)) {
+            Object vcPayload = VoiceControlPayload.createPayload(data);
+            if (vcPayload != null) return vcPayload;
         }
 
-        Method typeMethod = null;
-        if (typeClass != null) {
-            for (Method m : payloadClass.getDeclaredMethods()) {
-                if (m.getParameterCount() == 0
-                        && typeClass.isAssignableFrom(m.getReturnType())) {
-                    typeMethod = m;
-                    break;
-                }
-            }
-        }
+        Object typeInstance = createCustomPayloadType(channel);
+        Class<?> typeClass = typeInstance != null ? typeInstance.getClass() : null;
 
-        final Object typeInstance;
-        if (typeMethod != null && typeClass != null) {
-            Class<?> resourceLocClass = ResourceLocReflector.classOrThrow();
-            Constructor<?> typeCtor = null;
-            for (Constructor<?> c : typeClass.getDeclaredConstructors()) {
-                Class<?>[] p = c.getParameterTypes();
-                if (p.length == 1 && resourceLocClass.isAssignableFrom(p[0])) {
-                    typeCtor = c;
-                    break;
-                }
-            }
-            if (typeCtor == null) {
-                for (Constructor<?> c : typeClass.getDeclaredConstructors()) {
-                    Class<?>[] p = c.getParameterTypes();
-                    if (p.length == 1 && p[0].isInstance(channel)) {
-                        typeCtor = c;
-                        break;
-                    }
-                }
-            }
-            if (typeCtor != null) {
-                typeCtor.setAccessible(true);
-                typeInstance = typeCtor.newInstance(channel);
-            } else {
-                typeInstance = null;
-            }
-        } else {
-            typeInstance = null;
-        }
-
-        final Method   finalTypeMethod = typeMethod;
+        final Object finalTypeInstance = typeInstance;
         final Class<?> finalTypeClass = typeClass;
         final Object   finalChannel = channel;
         final byte[]   finalData = data;
         final Class<?> resourceLocClass = ResourceLocReflector.classOrNull();
 
         InvocationHandler handler = (proxy, method, args) -> {
+            if (method.getDeclaringClass() == RawPayload.class) {
+                if (method.getName().equals("e4all$data")) return finalData;
+                return finalChannel;
+            }
+
             Class<?> ret = method.getReturnType();
             Class<?>[] params = method.getParameterTypes();
 
-            if (finalTypeMethod != null && method.equals(finalTypeMethod)) return typeInstance;
+            if (finalTypeInstance != null && (ret.isInstance(finalTypeInstance) || (finalTypeClass != null && finalTypeClass.isAssignableFrom(ret))) && params.length == 0)
+                return finalTypeInstance;
 
-            if (finalTypeClass != null && finalTypeClass.isAssignableFrom(ret) && params.length == 0)
-                return typeInstance;
+            if (params.length == 0 && ("type".equals(method.getName()) || "id".equals(method.getName()) || "method_56479".equals(method.getName())))
+                return finalTypeInstance;
 
             if (resourceLocClass != null && resourceLocClass.isAssignableFrom(ret) && params.length == 0)
                 return finalChannel;
@@ -531,7 +518,56 @@ public final class PacketHelper {
 
         return Proxy.newProxyInstance(
                 payloadClass.getClassLoader(),
-                new Class<?>[]{payloadClass},
+                new Class<?>[]{payloadClass, RawPayload.class},
                 handler);
+    }
+
+    // id setter changes name between versions
+    public static void writeIdAndBytes(FriendlyByteBuf buf, Object id, byte[] data) {
+        boolean written = false;
+        String[] candidateNames = {"writeIdentifier", "writeResourceLocation", "method_10798"};
+        for (String name : candidateNames) {
+            for (Method m : FriendlyByteBuf.class.getMethods()) {
+                if (m.getName().equals(name) && m.getParameterCount() == 1
+                        && m.getParameterTypes()[0] != Object.class
+                        && isResourceLoc(m.getParameterTypes()[0])) {
+                    try {
+                        m.invoke(buf, id);
+                        written = true;
+                        break;
+                    } catch (Throwable ignored) {}
+                }
+            }
+            if (written) break;
+        }
+
+        if (!written) {
+            for (Method m : FriendlyByteBuf.class.getMethods()) {
+                if (m.getParameterCount() != 1) continue;
+                Class<?> param = m.getParameterTypes()[0];
+                if (param == Object.class || !isResourceLoc(param)) continue;
+                if (!param.isInstance(id)) continue;
+                Class<?> ret = m.getReturnType();
+                if (ret != void.class && !ret.isAssignableFrom(FriendlyByteBuf.class)) continue;
+                try {
+                    m.invoke(buf, id);
+                    written = true;
+                    break;
+                } catch (Throwable ignored) {}
+            }
+        }
+
+        if (!written && id != null) {
+            try {
+                buf.writeUtf(id.toString());
+                written = true;
+            } catch (Throwable t) {
+                LOGGER.warn("e4all: failed to write payload ID {}", id, t);
+            }
+        }
+
+        if (data != null && data.length > 0) {
+            buf.writeBytes(data);
+        }
     }
 }

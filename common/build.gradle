@@ -39,6 +39,6 @@ artifacts {
 }
 
 remapJar {
-    enabled = true
+    enabled = false
 }
 

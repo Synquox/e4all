@@ -1,8 +1,13 @@
 package link.e4all;
 
 import com.mojang.brigadier.CommandDispatcher;
+import link.e4all.voice.VoiceControlPayload;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.server.commands.BanListCommands;
 import net.minecraft.server.commands.BanPlayerCommands;
 import net.minecraft.server.commands.PardonCommand;
@@ -15,8 +20,6 @@ public class E4allClient {
     public static volatile QuiclimeSession session;
     public static final Object SESSION_LOCK = new Object();
     public static final Logger LOGGER = LoggerFactory.getLogger(E4allClient.MOD_ID);
-
-    public static boolean badurl = false;
 
     private static boolean canManage(CommandSourceStack source) {
         if (source == null) return false;
@@ -41,14 +44,25 @@ public class E4allClient {
     }
 
     public static void init() {
+        // Grabs the Bionic natives out of our jar and points the loaders' override
+        // properties at them, before anything can try to load a native. Desktop: no-op.
+        AndroidNatives.prepare();
+
+        VoiceControlPayload.registerFabric();
+
         Config.INSTANCE.id(); // Touch to initialize for McQoy
-        try {
-            if (!PoisonPill.checkMotw()) {
-                badurl = true;
-                LOGGER.warn("MotW lists unknown source! Poison pill active!");
+
+        if (AndroidDetector.isAndroid()) {
+            if (AndroidNatives.hasQuicheNative()) {
+                LOGGER.info("e4all: running on Android with Bionic QUIC native; relay hosting available.");
+            } else {
+                LOGGER.warn("e4all: running on Android without a usable QUIC native; relay hosting will fail.");
             }
-        } catch (Exception e) {
-            LOGGER.warn("MotW check failed!", e);
+            if (AndroidNatives.hasIrohNative()) {
+                LOGGER.info("e4all: running on Android with Bionic iroh native; Dialtone P2P available.");
+            } else {
+                LOGGER.info("e4all: running on Android without a Bionic iroh native; Dialtone P2P disabled (relayed play still works).");
+            }
         }
     }
 
@@ -91,6 +105,10 @@ public class E4allClient {
                             thread.start();
                             return 1;
                         }))
+                        .then(Commands.literal("info").executes(ctx -> {
+                            Mirror.sendSuccessToSource(ctx.getSource(), infoMessage());
+                            return 1;
+                        }))
                         .then(Commands.literal("restart").requires(E4allClient::canManage).executes(ctx -> {
                             synchronized (SESSION_LOCK) {
                                 if (E4allClient.session != null) {
@@ -126,6 +144,45 @@ public class E4allClient {
                 Commands.literal("e4mc")
                         .redirect(dispatcher.getRoot().getChild("e4all"))
         );
+    }
+
+    private static final String DISCORD_URL = "https://discord.gg/McAy9u56NC";
+    private static final String GITHUB_URL = "https://github.com/Synquox/e4all";
+
+    public static Component infoMessage() {
+        Component githubLink = Mirror.withStyle(Mirror.literal(GITHUB_URL), it -> {
+            Style s = it.withColor(ChatFormatting.AQUA);
+            ClickEvent openEvent = Mirror.openUrlEvent(GITHUB_URL);
+            if (openEvent != null) s = s.withClickEvent(openEvent);
+            return s;
+        });
+        Component discordLink = Mirror.withStyle(Mirror.literal(DISCORD_URL), it -> {
+            Style s = it.withColor(ChatFormatting.AQUA);
+            ClickEvent openEvent = Mirror.openUrlEvent(DISCORD_URL);
+            if (openEvent != null) s = s.withClickEvent(openEvent);
+            return s;
+        });
+        Component line1 = Mirror.append(
+                Mirror.translatable("text.e4all_minecraft.info.tagline"),
+                Mirror.append(Mirror.literal(" "),
+                        Mirror.translatable("text.e4all_minecraft.info.github")));
+        Component githubLine = Mirror.append(line1, githubLink);
+        Component discordLine = Mirror.append(
+                Mirror.translatable("text.e4all_minecraft.info.discord"),
+                discordLink);
+        return Mirror.append(githubLine, Mirror.append(Mirror.literal("\n"), discordLine));
+    }
+
+    public static Component welcomeHeader() {
+        Component discordLink = Mirror.withStyle(Mirror.literal(DISCORD_URL), it -> {
+            Style s = it.withColor(ChatFormatting.AQUA);
+            ClickEvent openEvent = Mirror.openUrlEvent(DISCORD_URL);
+            if (openEvent != null) s = s.withClickEvent(openEvent);
+            return s;
+        });
+        return Mirror.append(
+                Mirror.translatable("text.e4all_minecraft.welcome.header"),
+                discordLink);
     }
 }
 

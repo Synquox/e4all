@@ -23,19 +23,19 @@ public abstract class ServerConnectionListenerMixin {
     @Unique
     private EventLoopGroup e4mc$group;
 
-    @ModifyArg(method = {"startTcpServerListener", "method_14354", "m_9711_"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;childHandler(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
+    @ModifyArg(method = "startTcpServerListener", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;childHandler(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
     private ChannelHandler interceptHandler(ChannelHandler childHandler) {
         e4mc$childHandler = childHandler;
         return childHandler;
     }
 
-    @ModifyArg(method = {"startTcpServerListener", "method_14354", "m_9711_"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
+    @ModifyArg(method = "startTcpServerListener", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false), require = 0)
     private EventLoopGroup interceptGroup(EventLoopGroup group) {
         e4mc$group = group;
         return group;
     }
 
-    @Inject(method = {"startTcpServerListener", "method_14354", "m_9711_"}, at = @At(value = "TAIL"), require = 0)
+    @Inject(method = "startTcpServerListener", at = @At(value = "TAIL"), require = 0)
     private void interceptGroup(InetAddress inetAddress, int i, CallbackInfo ci) {
         boolean realE4mcInstalled = false;
         try {
@@ -50,10 +50,10 @@ public abstract class ServerConnectionListenerMixin {
             return;
         }
 
-        if (link.e4all.AndroidDetector.isAndroid()) {
-            link.e4all.E4allClient.LOGGER.warn("e4all: Android environment detected. QUIC tunnel hosting is not supported on Android (native libraries require glibc, Android uses bionic libc). Detection: {}", link.e4all.AndroidDetector.detect().reason());
+        if (link.e4all.AndroidDetector.isAndroid() && !link.e4all.AndroidNatives.hasQuicheNative()) {
+            link.e4all.E4allClient.LOGGER.warn("e4all: Android detected but no Bionic QUIC native is available, relay hosting disabled. Detection: {}", link.e4all.AndroidDetector.detect().reason());
             if (link.e4all.Agnos.isClient()) {
-                link.e4all.Mirror.addMessage(link.e4all.Mirror.translatable("text.e4all_minecraft.error.androidUnsupported"));
+                link.e4all.Mirror.addMessage(link.e4all.Mirror.translatable("text.e4all_minecraft.android.noNative"));
             }
             e4mc$childHandler = null;
             e4mc$group = null;
@@ -63,6 +63,29 @@ public abstract class ServerConnectionListenerMixin {
         if (Config.INSTANCE.hostEnabled.value()) {
             synchronized (E4allClient.SESSION_LOCK) {
                 QuiclimeSession existing = E4allClient.session;
+                if (existing != null && existing.state == QuiclimeSession.State.STOPPING) {
+                    // old session is mid-teardown; wait for a terminal state so we
+                    // never run two sessions at once
+                    E4allClient.LOGGER.info("e4all: session is stopping, waiting for teardown to finish");
+                    long deadline = System.currentTimeMillis() + 5000;
+                    while (existing.state == QuiclimeSession.State.STOPPING && System.currentTimeMillis() < deadline) {
+                        try {
+                            E4allClient.SESSION_LOCK.wait(100);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                    if (existing.state == QuiclimeSession.State.STOPPING) {
+                        E4allClient.LOGGER.warn("e4all: session still stopping after 5s, forcing sync stop");
+                        try {
+                            existing.stopSync();
+                        } catch (Throwable t) {
+                            E4allClient.LOGGER.warn("e4all: forced stop failed", t);
+                        }
+                    }
+                    existing = E4allClient.session;
+                }
                 if (existing != null) {
                     if (existing.state == QuiclimeSession.State.UNHEALTHY
                             || existing.state == QuiclimeSession.State.STOPPED) {
@@ -73,6 +96,13 @@ public abstract class ServerConnectionListenerMixin {
                             || existing.state == QuiclimeSession.State.RECONNECTING) {
                         // session is still active, dont make another one
                         E4allClient.LOGGER.info("e4all: Session already active (state: {}), skipping new tunnel creation", existing.state);
+                        e4mc$childHandler = null;
+                        e4mc$group = null;
+                        return;
+                    } else if (existing.state == QuiclimeSession.State.STOPPING) {
+                        // should not happen after the wait above, but never spawn a
+                        // duplicate session mid-teardown
+                        E4allClient.LOGGER.warn("e4all: session still stopping, skipping new tunnel creation");
                         e4mc$childHandler = null;
                         e4mc$group = null;
                         return;
@@ -96,7 +126,9 @@ public abstract class ServerConnectionListenerMixin {
             QuiclimeSession session = E4allClient.session;
             if ((session != null) && (session.state != QuiclimeSession.State.STOPPED)) {
                 session.stop();
-                E4allClient.session = null;
+                // keep the reference around until it reaches a terminal state; the
+                // creation path handles STOPPING/STOPPED cleanup under the same lock
+                E4allClient.SESSION_LOCK.notifyAll();
             }
         }
     }

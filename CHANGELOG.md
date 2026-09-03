@@ -1,7 +1,21 @@
 # Changelog
 
-## 2.0.0-beta.3
+## 2.1.0
 
+### Bug Fixes
+* Some bug fixes, like fixing Sable compatibility with e4all's SVC feature, fixing relay problems and other problems some individuals had. Though one person experiences a bug where they couldn't break any blocks, which I confirmed but I could genuinly not find out the reason, I also coudln't recreate this bug with another person, it was a bug only he had, this still isn't fixed. Another bug fixed is: I fixed the NCR implementation in this mod.
+
+### P2P SVC
+* Voice chat (SVC) now runs ONLY over direct player-to-player connections, this is because I don't want to put extra weight on e4mc's relay that I use. If somebody doesn't support P2P then they can't use SVC.
+
+### Android
+* Relay hosting works on Android
+* The "-android" jar variant bundles the aarch64 natives; the plain release jar stays slim.
+
+### Krypton
+* If e4all is installed alongside Krypton it shouldn't be a problem anymore :) (though I don't recommend using Krypton alongside e4all as it's useless)
+
+## 2.0.0-beta.3
 ### New Features & Compatibility
 * Ported `e4all` to support Minecraft `26.3-snapshot-9` for Fabric and NeoForge.
 * Fixed really bad bugs.

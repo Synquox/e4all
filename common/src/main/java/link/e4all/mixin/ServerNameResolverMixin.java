@@ -41,7 +41,10 @@ public class ServerNameResolverMixin {
             dirContext = new InitialDirContext(environment);
             return serverAddress -> {
                 var inner = innerHandler.lookupRedirect(serverAddress);
-                if (!Config.INSTANCE.dialtonePlayerEnabled.value()) {
+                // On Android we can only do Dialtone when a Bionic iroh native is
+                // bundled; plain relay play is unaffected either way.
+                if (!Config.INSTANCE.dialtonePlayerEnabled.value()
+                        || (link.e4all.AndroidDetector.isAndroid() && !link.e4all.AndroidNatives.hasIrohNative())) {
                     return inner;
                 } if (inner.isPresent()) {
                     return inner;
@@ -76,6 +79,10 @@ public class ServerNameResolverMixin {
                                         ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(ticket);
                                         VoiceBridge.setPendingDialtoneTicket(ticket);
                                         return Optional.of(serverAddress);
+                                    } else if (response.statusCode() == 404) {
+                                        E4allClient.LOGGER.warn("e4all: Domain '{}' not found (HTTP 404). The host's session has ended or the address is stale. Ask the host for the new address. Avoid retrying more than once per minute (relay rate-limits return misleading 404s).", serverAddress.getHost());
+                                    } else {
+                                        E4allClient.LOGGER.warn("e4all: Unexpected ticket response for '{}': HTTP {} (expected 200 with v1_ body)", serverAddress.getHost(), response.statusCode());
                                     }
                                 }
                             }
@@ -92,7 +99,7 @@ public class ServerNameResolverMixin {
         return innerHandler;
     }
 
-    @Redirect(method = {"resolveAddress", "method_2965", "m_171848_"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"), require = 0)
+    @Redirect(method = "resolveAddress", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"), require = 0)
     private Optional<ResolvedServerAddress> resolveBogus(ServerAddressResolver instance, ServerAddress serverAddress) {
         var smuggledTicket = ((TicketSmuggler) (Object) serverAddress).e4mc$getSmuggledTicket();
         if (smuggledTicket != null) {
@@ -101,5 +108,3 @@ public class ServerNameResolverMixin {
         return instance.resolve(serverAddress);
     }
 }
-
-

@@ -1,8 +1,8 @@
 package link.e4all;
 
-import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
+import link.e4all.voice.VoiceControl;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
@@ -13,6 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -46,7 +49,21 @@ public final class XaeroWorldIdentity {
         getOrCreateWorldId(server);
     }
 
-    public static void sendToRelayPlayer(MinecraftServer server, Connection connection, ServerPlayer player) {
+    private static final Map<Object, Integer> MOVE_COUNTS = Collections.synchronizedMap(new WeakHashMap<>());
+
+    // ~1s of movement packets, guest world join and the xaero session are up by then
+    private static final int MOVES_BEFORE_SEND = 20;
+
+    public static void onPlayerMoved(Object listener, ServerPlayer player) {
+        if (listener == null || player == null) return;
+        int moves = MOVE_COUNTS.merge(listener, 1, Integer::sum);
+        if (moves != MOVES_BEFORE_SEND) return;
+        MinecraftServer server = VoiceControl.extractServer(player);
+        if (server == null) return;
+        sendToRelayPlayer(server, player);
+    }
+
+    public static void sendToRelayPlayer(MinecraftServer server, ServerPlayer player) {
         QuiclimeSession session = E4allClient.session;
         if (session == null || session.state != QuiclimeSession.State.STARTED) {
             return;

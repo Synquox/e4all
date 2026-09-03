@@ -14,6 +14,7 @@ import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.kqueue.KQueueIoHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
+import io.netty.channel.socket.ChannelInputShutdownEvent;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.codec.ByteToMessageCodec;
@@ -50,8 +51,18 @@ public class QuiclimeSession {
 
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private static final int RECONNECT_BASE_DELAY_SECONDS = 2;
-    private static final int KEEPALIVE_INTERVAL_SECONDS = 5;
+    private static final int KEEPALIVE_INTERVAL_SECONDS = 15;
     private static final int MAX_IDLE_TIMEOUT_SECONDS = 60;
+
+    private int getMaxReconnectAttempts() {
+        try { return Config.INSTANCE.reconnectMaxAttempts.value(); } catch (Throwable t) { return MAX_RECONNECT_ATTEMPTS; }
+    }
+    private int getReconnectBaseDelay() {
+        try { return Config.INSTANCE.reconnectBaseDelaySeconds.value(); } catch (Throwable t) { return RECONNECT_BASE_DELAY_SECONDS; }
+    }
+    private int getKeepaliveInterval() {
+        try { return Config.INSTANCE.keepaliveIntervalSeconds.value(); } catch (Throwable t) { return KEEPALIVE_INTERVAL_SECONDS; }
+    }
 
     final ChannelHandler handler;
 
@@ -215,6 +226,11 @@ public class QuiclimeSession {
     private volatile QuicChannel quicChannel;
     private volatile DialtoneServerChannel dialtoneChannel;
     private volatile ScheduledFuture<?> keepaliveFuture;
+    private volatile QuicStreamChannel controlStreamChannel;
+    private volatile String cachedTicket;
+    private volatile String previousDomain;
+    private volatile long lastCapabilitiesResponseTime;
+    private final AtomicInteger missedKeepaliveCount = new AtomicInteger(0);
 
     public QuiclimeSession(ChannelHandler handler, EventLoopGroup group) {
         this.handler = handler;
@@ -229,17 +245,14 @@ public class QuiclimeSession {
 
     private static BrokerResponse getRelay() throws Exception {
         if (Config.INSTANCE.useBroker.value()) {
-            var request = HttpRequest
-                    .newBuilder(new URI(Config.INSTANCE.brokerUrl.value()))
-                    .header("Accept", "application/json")
-                    .build();
-            LOGGER.info("broker req: {}", request);
-            var response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-            LOGGER.info("broker resp: {}", response);
-            if (response.statusCode() != 200) {
-                throw new RuntimeException("Broker returned status " + response.statusCode());
+            var url = new URI(Config.INSTANCE.brokerUrl.value());
+            LOGGER.info("broker req: {} GET", url);
+            var response = httpFetch(url);
+            LOGGER.info("broker resp: status {} body {}", response.status, response.body);
+            if (response.status != 200) {
+                throw new RuntimeException("Broker returned status " + response.status);
             }
-            return gson.fromJson(response.body(), BrokerResponse.class);
+            return gson.fromJson(response.body, BrokerResponse.class);
         } else {
             var resp = new BrokerResponse();
             resp.id = "custom";
@@ -249,18 +262,52 @@ public class QuiclimeSession {
         }
     }
 
+    private static final String[] DEFAULT_RELAY_MAP = new String[]{
+        "https://ap.e4mc.link:8443",
+        "https://de.e4mc.link:8443",
+        "https://eu.e4mc.link:8443",
+        "https://jp.e4mc.link:8443",
+        "https://na.e4mc.link:8443",
+        "https://oc.e4mc.link:8443",
+        "https://sg.e4mc.link:8443",
+        "https://us.e4mc.link:8443",
+        "https://cl.e4mc.link:8443"
+    };
+    private static volatile String[] cachedRelayMap = null;
+
     public static String[] getRelayMap() throws Exception {
-        var request = HttpRequest
-                .newBuilder(new URI(Config.INSTANCE.dialtoneRelayMap.value()))
+        if (cachedRelayMap != null) {
+            return cachedRelayMap;
+        }
+        try {
+            var url = new URI(Config.INSTANCE.dialtoneRelayMap.value());
+            LOGGER.info("relaymap req: {} GET", url);
+            var response = httpFetch(url);
+            LOGGER.info("relaymap resp: status {} body {}", response.status, response.body);
+            if (response.status == 200) {
+                String[] parsed = gson.fromJson(response.body, String[].class);
+                if (parsed != null && parsed.length > 0) {
+                    cachedRelayMap = parsed;
+                    return parsed;
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to fetch dynamic relay map, using default relay list", t);
+        }
+        cachedRelayMap = DEFAULT_RELAY_MAP;
+        return DEFAULT_RELAY_MAP;
+    }
+
+    static NetDns.Response httpFetch(URI uri) throws Exception {
+        if (AndroidDetector.isAndroid()) {
+            return NetDns.httpGet(uri);
+        }
+        var request = HttpRequest.newBuilder(uri)
+                .timeout(java.time.Duration.ofSeconds(3))
                 .header("Accept", "application/json")
                 .build();
-        LOGGER.info("relaymap req: {}", request);
         var response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-        LOGGER.info("relaymap resp: {}", response);
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Relay map returned status " + response.statusCode());
-        }
-        return gson.fromJson(response.body(), String[].class);
+        return new NetDns.Response(response.statusCode(), response.body());
     }
 
     public int getReconnectCount() {
@@ -321,10 +368,24 @@ public class QuiclimeSession {
                 }
                 datagramChannel = (DatagramChannel) ((ChannelFuture) datagramChannelFuture).channel();
                 QuicChannel.newBootstrap(datagramChannel)
+                        .streamOption(ChannelOption.ALLOW_HALF_CLOSURE, false)
                         .streamHandler(new ChannelInitializer<QuicStreamChannel>() {
                             @Override
                             protected void initChannel(QuicStreamChannel ch) {
-                                ch.pipeline().addLast("voiceRouter", new link.e4all.voice.VoiceStreamRouter(handler));
+                                ch.config().setAllowHalfClosure(false);
+                                ch.pipeline().addLast("e4all$halfClosureHandler", new ChannelInboundHandlerAdapter() {
+                                    @Override
+                                    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+                                        if (evt instanceof ChannelInputShutdownEvent) {
+                                            ctx.close();
+                                            return;
+                                        }
+                                        super.userEventTriggered(ctx, evt);
+                                    }
+                                });
+                                // relay streams carry game traffic only, voice moved to
+                                // direct transports (2.1.0)
+                                ch.pipeline().addLast(handler);
                             }
                         })
                         .handler(new ChannelInboundHandlerAdapter() {
@@ -342,10 +403,10 @@ public class QuiclimeSession {
                                 cancelKeepalive();
                                 if (state != State.STOPPING && state != State.STOPPED) {
                                     int attempts = reconnectCount.incrementAndGet();
-                                    if (attempts <= MAX_RECONNECT_ATTEMPTS) {
+                                    if (attempts <= getMaxReconnectAttempts()) {
                                         state = State.RECONNECTING;
-                                        int delay = RECONNECT_BASE_DELAY_SECONDS * (1 << (attempts - 1));
-                                        LOGGER.info("Auto-reconnecting to relay in {}s (attempt {}/{})", delay, attempts, MAX_RECONNECT_ATTEMPTS);
+                                        int delay = getReconnectBaseDelay() * (1 << (attempts - 1));
+                                        LOGGER.info("Auto-reconnecting to relay in {}s (attempt {}/{})", delay, attempts, getMaxReconnectAttempts());
                                         if (Agnos.isClient()) {
                                             Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.reconnecting"));
                                         }
@@ -355,8 +416,7 @@ public class QuiclimeSession {
                                                 synchronized (E4allClient.SESSION_LOCK) {
                                                     State currentState = state;
                                                     if (currentState == State.RECONNECTING) {
-                                                        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
-                                                        QuiclimeSession.this.cleanupChannels();
+                                                        QuiclimeSession.this.cleanupControlChannels();
                                                         start();
                                                     } else {
                                                         LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
@@ -372,10 +432,11 @@ public class QuiclimeSession {
                                         reconnectThread.setDaemon(true);
                                         reconnectThread.start();
                                     } else {
-                                        LOGGER.error("Max reconnect attempts ({}) reached; giving up", MAX_RECONNECT_ATTEMPTS);
+                                        LOGGER.error("Max reconnect attempts ({}) reached; giving up. Re-open the world to LAN or run /e4all restart.", getMaxReconnectAttempts());
                                         state = State.STOPPED;
+                                        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
                                         if (Agnos.isClient()) {
-                                            Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error"));
+                                            Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.maxReconnectFailed"));
                                         }
                                     }
                                 } else {
@@ -405,6 +466,9 @@ public class QuiclimeSession {
                             ch.pipeline().addLast(new ControlMessageCodec(), new SimpleChannelInboundHandler<ControlMessageCodec.ControlMessage>() {
                                 @Override
                                 protected void channelRead0(ChannelHandlerContext ctx, ControlMessageCodec.ControlMessage msg) {
+                                    // any inbound message proves liveness; has_capabilities alone is unreliable here
+                                    lastCapabilitiesResponseTime = System.currentTimeMillis();
+                                    missedKeepaliveCount.set(0);
                                     if (msg instanceof ControlMessageCodec.DomainAssignmentCompleteMessageClientbound) {
                                         state = State.STARTED;
                                         reconnectCount.set(0);
@@ -413,8 +477,14 @@ public class QuiclimeSession {
                                             LOGGER.warn("e4all running on Dedicated Server; This works, but isn't recommended as e4all is designed for short-lived LAN servers");
                                         }
                                         String domain = ((ControlMessageCodec.DomainAssignmentCompleteMessageClientbound) msg).domain;
+                                        boolean isReassignment = assignedDomain != null;
+                                        String oldDomain = assignedDomain;
                                         assignedDomain = domain;
-                                        LOGGER.info("Domain assigned: {}", domain);
+                                        if (isReassignment) {
+                                            LOGGER.info("Domain reassigned after reconnect: {} (was: {})", domain, oldDomain);
+                                        } else {
+                                            LOGGER.info("Domain assigned: {}", domain);
+                                        }
                                         if (Agnos.isClient()) {
                                             try {
                                                 Component domainComponent = Mirror.literal(domain);
@@ -440,14 +510,24 @@ public class QuiclimeSession {
                                                         styledStop
                                                 );
                                                 Mirror.addMessage(message);
-                                                if (E4allClient.badurl) {
-                                                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.poisonpill.badurl"));
+                                                if (isReassignment) {
+                                                    Mirror.addMessage(Mirror.withStyle(
+                                                            Mirror.translatable("text.e4all_minecraft.domainReassigned"),
+                                                            it -> it.withColor(ChatFormatting.YELLOW)));
                                                 }
-                                                // show offline warning on lan open
-                                                if (Config.INSTANCE.offlineMode.value()) {
+                                                // show offline warning on lan open (first assignment only)
+                                                if (!isReassignment && Config.INSTANCE.offlineMode.value()) {
                                                     Config.INSTANCE.offlineWarningShown.setValue(true, true);
                                                     LOGGER.warn("e4all: Offline mode enabled, mojang auth is disabled for this session.");
                                                     Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
+                                                }
+                                                // one-time welcome message for the host (first assignment only)
+                                                if (!isReassignment && !Config.INSTANCE.welcomeShown.value()) {
+                                                    Config.INSTANCE.welcomeShown.setValue(true, true);
+                                                    Mirror.addMessage(Mirror.append(
+                                                            E4allClient.welcomeHeader(),
+                                                            Mirror.append(Mirror.literal("\n"),
+                                                                    Mirror.translatable("text.e4all_minecraft.welcome.hint"))));
                                                 }
                                             } catch (Throwable t) {
                                                 LOGGER.error("Failed to format or send domain assigned message", t);
@@ -460,6 +540,9 @@ public class QuiclimeSession {
                                             Mirror.addMessage(Mirror.literal(((ControlMessageCodec.RequestMessageBroadcastMessageClientbound) msg).message));
                                         }
                                     }
+                                    if (msg instanceof ControlMessageCodec.UnknownMessageMessageClientbound) {
+                                        LOGGER.debug("Relay replied unknown_message to a control message (expected after domain assignment, e.g. for keepalive probes)");
+                                    }
                                     if (msg instanceof ControlMessageCodec.HasCapabilitiesMessageClientbound) {
                                         var streamChannel = ctx.channel();
                                         boolean hasDialtoneSidecar = false;
@@ -469,8 +552,28 @@ public class QuiclimeSession {
                                                 break;
                                             }
                                         }
-                                        if (hasDialtoneSidecar && Config.INSTANCE.dialtoneHostEnabled.value()) {
-                                            new ServerBootstrap()
+                                        if (hasDialtoneSidecar
+                                                && Config.INSTANCE.dialtoneHostEnabled.value()
+                                                && (!AndroidDetector.isAndroid() || AndroidNatives.hasIrohNative())) {
+                                            // endpoint alive: re-register ticket instead of re-binding
+                                            if (dialtoneChannel != null && dialtoneChannel.isActive()) {
+                                                LOGGER.info("Dialtone endpoint still alive across reconnect, re-registering ticket");
+                                                String ticket = cachedTicket;
+                                                if (ticket != null) {
+                                                    streamChannel
+                                                            .writeAndFlush(new ControlMessageCodec.DialtoneRegisterTicketMessageServerbound(ticket))
+                                                            .addListener(ignored -> LOGGER.info("notified server of our ticket (re-registered after reconnect)"));
+                                                } else {
+                                                    LOGGER.warn("Dialtone endpoint alive but no cached ticket to re-register");
+                                                }
+                                            } else {
+                                                if (dialtoneChannel != null) {
+                                                    LOGGER.info("Dialtone endpoint was unhealthy, recreating");
+                                                    try { dialtoneChannel.close(); } catch (Throwable ignored) {}
+                                                    dialtoneChannel = null;
+                                                }
+                                                LOGGER.info("Binding new Dialtone endpoint");
+                                                new ServerBootstrap()
                                                     .channel(DialtoneServerChannel.class)
                                                     .handler(new ChannelInboundHandlerAdapter() {
                                                         @Override
@@ -481,8 +584,10 @@ public class QuiclimeSession {
                                                                 if (Config.INSTANCE.dialtoneSanitizeTicket.value()) {
                                                                     ticket = Endpoint.sanitizeTicket(ticket);
                                                                 }
+                                                                String fullTicket = "v1_" + ticket;
+                                                                cachedTicket = fullTicket;
                                                                 streamChannel
-                                                                        .writeAndFlush(new ControlMessageCodec.DialtoneRegisterTicketMessageServerbound("v1_" + ticket))
+                                                                        .writeAndFlush(new ControlMessageCodec.DialtoneRegisterTicketMessageServerbound(fullTicket))
                                                                         .addListener(ignored -> LOGGER.info("notified server of our ticket"));
                                                             }
                                                         }
@@ -504,6 +609,7 @@ public class QuiclimeSession {
                                                         }
                                                         dialtoneChannel = (DialtoneServerChannel) dialtoneChannelFuture.get();
                                                     });
+                                            }
                                         }
                                     }
                                 }
@@ -515,6 +621,9 @@ public class QuiclimeSession {
                             return;
                         }
                         QuicStreamChannel streamChannel = (QuicStreamChannel) it.getNow();
+                        controlStreamChannel = streamChannel;
+                        lastCapabilitiesResponseTime = System.currentTimeMillis();
+                        missedKeepaliveCount.set(0);
                         LOGGER.info("control channel open: {}", streamChannel);
                         streamChannel
                                 .writeAndFlush(new ControlMessageCodec.ProbeCapabilitiesMessageServerbound())
@@ -547,13 +656,32 @@ public class QuiclimeSession {
 
     private void startKeepalive(QuicChannel channel) {
         cancelKeepalive();
+        int interval = getKeepaliveInterval();
         keepaliveFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
                 if (!channel.isActive()) {
                     cancelKeepalive();
                     return;
                 }
-                channel.flush();
-        }, KEEPALIVE_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS, TimeUnit.SECONDS);
+                QuicStreamChannel ctrlStream = controlStreamChannel;
+                if (ctrlStream == null || !ctrlStream.isActive()) {
+                    LOGGER.debug("Keepalive skipped: control stream not available");
+                    return;
+                }
+                try {
+                    ctrlStream.writeAndFlush(new ControlMessageCodec.ProbeCapabilitiesMessageServerbound())
+                            .addListener(f -> {
+                                if (!f.isSuccess()) {
+                                    LOGGER.warn("Keepalive probe_capabilities write failed", f.cause());
+                                }
+                            });
+                    int missed = missedKeepaliveCount.incrementAndGet();
+                    if (missed >= 3) {
+                        LOGGER.warn("Relay link unhealthy: {} consecutive keepalive probes unanswered", missed);
+                    }
+                } catch (Throwable t) {
+                    LOGGER.warn("Keepalive probe failed", t);
+                }
+        }, interval, interval, TimeUnit.SECONDS);
     }
 
     private void cancelKeepalive() {
@@ -569,7 +697,8 @@ public class QuiclimeSession {
         failureCause = e;
         E4allClient.LOGGER.error("error in e4all", e);
         if (Agnos.isClient()) {
-            Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error"));
+            Mirror.addMessage(Mirror.append(Mirror.translatable("text.e4all_minecraft.error"),
+                    Mirror.literal(" (" + e.getClass().getSimpleName() + ")")));
         }
     }
 
@@ -590,11 +719,12 @@ public class QuiclimeSession {
         if (linkError != null) {
             AndroidDetector.DetectionResult androidCheck = AndroidDetector.detect();
             if (androidCheck.isAndroid()) {
-                E4allClient.LOGGER.error("e4all: Failed to load native QUIC library on Android. " +
-                        "The bundled native library requires glibc (desktop Linux), but Android uses bionic libc. " +
+                E4allClient.LOGGER.error("e4all: Failed to load the QUIC native library on Android. " +
+                        "Make sure you are running the -android variant of the jar (it bundles the Bionic build) " +
+                        "and that the extracted native is writable/executable. " +
                         "Detection: {}. Linker error: {}", androidCheck.reason(), linkError.getMessage(), e);
                 if (Agnos.isClient()) {
-                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error.androidUnsupported"));
+                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error.nativeLoadFailed"));
                 }
             } else {
                 E4allClient.LOGGER.error("e4all: Failed to load native QUIC library. " +
@@ -610,7 +740,8 @@ public class QuiclimeSession {
         } else {
             E4allClient.LOGGER.error("error in e4all", e);
             if (Agnos.isClient()) {
-                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error"));
+                Mirror.addMessage(Mirror.append(Mirror.translatable("text.e4all_minecraft.error"),
+                        Mirror.literal(" (" + e.getClass().getSimpleName() + ")")));
             }
         }
     }
@@ -626,12 +757,16 @@ public class QuiclimeSession {
     public void stop() {
         state = State.STOPPING;
         cancelKeepalive();
+        controlStreamChannel = null;
+        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
         afterCloseIfPresent(dialtoneChannel, q -> afterCloseIfPresent(quicChannel, a -> afterCloseIfPresent(datagramChannel, b -> state = State.STOPPED)));
     }
 
     public void stopSync() {
         state = State.STOPPING;
         cancelKeepalive();
+        controlStreamChannel = null;
+        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
         try { if (dialtoneChannel != null && dialtoneChannel.isOpen()) dialtoneChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
         try { if (quicChannel != null && quicChannel.isOpen()) quicChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
         try { if (datagramChannel != null && datagramChannel.isOpen()) datagramChannel.close().syncUninterruptibly(); } catch (Throwable ignored) {}
@@ -642,6 +777,7 @@ public class QuiclimeSession {
     }
 
     private void cleanupChannels() {
+        controlStreamChannel = null;
         try {
             if (dialtoneChannel != null && dialtoneChannel.isOpen()) {
                 dialtoneChannel.close();
@@ -668,8 +804,36 @@ public class QuiclimeSession {
         datagramChannel = null;
     }
 
+    // close control channels only, keeping iroh endpoint and voice streams for reconnect
+    private void cleanupControlChannels() {
+        controlStreamChannel = null;
+        try {
+            if (quicChannel != null && quicChannel.isOpen()) {
+                quicChannel.close();
+            }
+        } catch (Throwable e) {
+            LOGGER.warn("Error closing QUIC channel during control cleanup", e);
+        }
+        quicChannel = null;
+        try {
+            if (datagramChannel != null && datagramChannel.isOpen()) {
+                datagramChannel.close();
+            }
+        } catch (Throwable e) {
+            LOGGER.warn("Error closing datagram channel during control cleanup", e);
+        }
+        datagramChannel = null;
+    }
+
 
     private static InetAddress resolvePreferIpv4(String host) throws java.net.UnknownHostException {
+        if (AndroidDetector.isAndroid()) {
+            try {
+                return NetDns.resolve(host);
+            } catch (Throwable t) {
+                LOGGER.warn("e4all: netty dns failed for {}, trying system resolver", host);
+            }
+        }
         InetAddress[] all = InetAddress.getAllByName(host);
         for (InetAddress addr : all) {
             if (addr instanceof Inet4Address) {

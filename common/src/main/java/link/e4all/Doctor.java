@@ -5,16 +5,12 @@ import com.google.gson.Gson;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
 public class Doctor {
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
     public static String doctor() {
         var result = new StringBuilder();
         result.append("mod sha512sum: ");
@@ -39,6 +35,12 @@ public class Doctor {
         var androidResult = AndroidDetector.detect();
         result.append("  android detected: ").append(androidResult.isAndroid()).append("\n");
         result.append("  android detection reason: ").append(androidResult.reason()).append("\n");
+        if (androidResult.isAndroid()) {
+            result.append("  android quiche native available: ")
+                  .append(AndroidNatives.hasQuicheNative()).append("\n");
+            result.append("  android dialtone (iroh) native available: ")
+                  .append(AndroidNatives.hasIrohNative()).append("\n");
+        }
         String nativePath = System.getProperty("link.e4mc.native_path");
         if (nativePath != null) {
             result.append("  link.e4mc.native_path: ").append(nativePath).append("\n");
@@ -80,21 +82,18 @@ public class Doctor {
         }
         result.append("natives CDN test results:\n");
         try {
-            var request = HttpRequest
-                    .newBuilder(new URI("https://natives.e4mc.link/doctor-test-target"))
-                    .build();
-            var response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            var response = QuiclimeSession.httpFetch(new URI("https://natives.e4mc.link/doctor-test-target"));
             var exceptional = false;
-            if (response.statusCode() != 200) {
+            if (response.status != 200) {
                 exceptional = true;
                 result.append("status code was not 200, it was: ");
-                result.append(response.statusCode());
+                result.append(response.status);
                 result.append("\n");
             }
-            if (!response.body().equals("if you can read this, e4mc natives are available. qmqj8c13nzdr0kd10gihcila")) {
+            if (!response.body.equals("if you can read this, e4mc natives are available. qmqj8c13nzdr0kd10gihcila")) {
                 exceptional = true;
                 result.append("response was unexpected, got: ");
-                result.append(response.body());
+                result.append(response.body);
                 result.append("\n");
             }
             if (!exceptional) {
@@ -114,20 +113,16 @@ public class Doctor {
                 result.append("using broker ");
                 result.append(Config.INSTANCE.brokerUrl.value());
                 result.append("\n");
-                var request = HttpRequest
-                        .newBuilder(new URI(Config.INSTANCE.brokerUrl.value()))
-                        .header("Accept", "application/json")
-                        .build();
-                var response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                var response = QuiclimeSession.httpFetch(new URI(Config.INSTANCE.brokerUrl.value()));
                 var exceptional = false;
-                if (response.statusCode() != 200) {
+                if (response.status != 200) {
                     exceptional = true;
                     result.append("status code was not 200, it was: ");
-                    result.append(response.statusCode());
+                    result.append(response.status);
                     result.append("\n");
                 }
                 var gson = new Gson();
-                brokerResponse = gson.fromJson(response.body(), QuiclimeSession.BrokerResponse.class);
+                brokerResponse = gson.fromJson(response.body, QuiclimeSession.BrokerResponse.class);
                 if (!exceptional) {
                     result.append("no issues found.\n");
                 }
@@ -159,21 +154,18 @@ public class Doctor {
             result.append("host is not standard. not attempting ping.\n");
         } else {
             try {
-                var request = HttpRequest
-                        .newBuilder(new URI(String.format("https://%s/ping", brokerResponse.host)))
-                        .build();
-                var response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                var response = QuiclimeSession.httpFetch(new URI(String.format("https://%s/ping", brokerResponse.host)));
                 var exceptional = false;
-                if (response.statusCode() != 200) {
+                if (response.status != 200) {
                     exceptional = true;
                     result.append("status code was not 200, it was: ");
-                    result.append(response.statusCode());
+                    result.append(response.status);
                     result.append("\n");
                 }
-                if (!response.body().equals("OK")) {
+                if (!response.body.equals("OK")) {
                     exceptional = true;
                     result.append("response was unexpected, got: ");
-                    result.append(response.body());
+                    result.append(response.body);
                     result.append("\n");
                 }
                 if (!exceptional) {
