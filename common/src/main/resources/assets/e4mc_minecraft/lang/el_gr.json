@@ -15,7 +15,6 @@
     "text.e4all_minecraft.onlineMode": "Online Mode: ",
     "text.e4all_minecraft.onlineModeTrue": "True",
     "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
-    "text.e4all_minecraft.reconnecting": "e4all: Η σύνδεση του αναμεταδότη χάθηκε, προσπάθεια επανασύνδεσης...",
     "text.e4all_minecraft.hiddenDomain": "κρυφό, κάντε κλικ για αντιγραφή",
     "text.e4all_minecraft.restartingRelay": "e4all: Επανεκκίνηση σύνδεσης relay...",
     "text.e4all_minecraft.error.noActiveSession": "e4all: Δεν υπάρχει ενεργή συνεδρία για επανεκκίνηση.",

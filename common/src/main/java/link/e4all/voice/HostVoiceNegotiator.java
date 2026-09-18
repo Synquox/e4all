@@ -5,6 +5,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import link.e4all.AndroidDetector;
 import link.e4all.Config;
 import link.e4all.E4allClient;
@@ -19,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class HostVoiceNegotiator {
     public static final HostVoiceNegotiator INSTANCE = new HostVoiceNegotiator();
 
-    private final EventLoopGroup voiceGroup = new DefaultEventLoopGroup(1);
+    private final EventLoopGroup voiceGroup = new DefaultEventLoopGroup(1,
+            new DefaultThreadFactory("e4all-voice-host", true));
     private volatile DialtoneServerChannel voiceServerChannel;
     private volatile String voiceTicket;
     private final ConcurrentHashMap<String, NegotiationState> negotiations = new ConcurrentHashMap<>();
@@ -217,7 +219,11 @@ public final class HostVoiceNegotiator {
         voiceTicket = null;
         if (ch != null && ch.isActive()) {
             try {
-                ch.close().syncUninterruptibly();
+                ch.close().addListener(f -> {
+                    if (!f.isSuccess()) {
+                        E4allClient.LOGGER.debug("e4all voice: voice server channel close failed", f.cause());
+                    }
+                });
             } catch (Throwable t) {
                 E4allClient.LOGGER.debug("e4all voice: error closing voice server channel", t);
             }

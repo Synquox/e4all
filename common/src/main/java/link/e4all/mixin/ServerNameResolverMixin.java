@@ -2,9 +2,11 @@ package link.e4all.mixin;
 
 import link.e4all.Config;
 import link.e4all.E4allClient;
+import link.e4all.Mirror;
 import link.e4all.SmugglersInetSocketAddress;
 import link.e4all.TicketSmuggler;
 import link.e4all.voice.VoiceBridge;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.resolver.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -67,28 +69,42 @@ public class ServerNameResolverMixin {
                                         E4allClient.LOGGER.warn("Ignoring resolver addr {} as it's not a suffix of the target address", resolverAddr);
                                         continue;
                                     }
+                                    // cached, asking again on every server list ping just earns rate limited 404s
+                                    link.e4all.DialtoneTicketCache.Lookup cached = link.e4all.DialtoneTicketCache.fresh(host);
+                                    if (cached != null) {
+                                        if (cached.hasTicket()) {
+                                            e4all$smuggleTicket(serverAddress, cached.ticket);
+                                            return Optional.of(serverAddress);
+                                        }
+                                        return Optional.empty();
+                                    }
                                     var request = HttpRequest
-                                            .newBuilder(new URI("https", resolverAddr, "/.well-known/dialtone_ticket/" + serverAddress.getHost(), null))
+                                            .newBuilder(new URI("https", resolverAddr, "/.well-known/dialtone_ticket/" + host, null))
                                             .timeout(Duration.ofSeconds(5))
                                             .build();
-                                    E4allClient.LOGGER.info("req: {}", request);
+                                    E4allClient.LOGGER.debug("req: {}", request);
                                     var response = E4ALL_HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-                                    E4allClient.LOGGER.info("resp: {}", response);
+                                    E4allClient.LOGGER.debug("resp: {}", response);
                                     if (response.statusCode() == 200 && response.body().startsWith("v1_")) {
                                         String ticket = response.body().substring(3);
-                                        ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(ticket);
-                                        VoiceBridge.setPendingDialtoneTicket(ticket);
+                                        link.e4all.DialtoneTicketCache.putTicket(host, ticket);
+                                        e4all$smuggleTicket(serverAddress, ticket);
                                         return Optional.of(serverAddress);
                                     } else if (response.statusCode() == 404) {
-                                        E4allClient.LOGGER.warn("e4all: Domain '{}' not found (HTTP 404). The host's session has ended or the address is stale. Ask the host for the new address. Avoid retrying more than once per minute (relay rate-limits return misleading 404s).", serverAddress.getHost());
+                                        // 404 just means the host has no dialtone endpoint (e.g. android), the link is not expired
+                                        link.e4all.DialtoneTicketCache.putNoTicket(host);
+                                        E4allClient.LOGGER.debug("e4all: no Dialtone ticket for '{}' (HTTP 404), using the relay", host);
                                     } else {
-                                        E4allClient.LOGGER.warn("e4all: Unexpected ticket response for '{}': HTTP {} (expected 200 with v1_ body)", serverAddress.getHost(), response.statusCode());
+                                        E4allClient.LOGGER.warn("e4all: Unexpected ticket response for '{}': HTTP {} (expected 200 or 404)", host, response.statusCode());
+                                        if (response.statusCode() >= 500) {
+                                            e4all$notifyRelayProblem("text.e4all_minecraft.ticketErrorChat", response.statusCode());
+                                        }
                                     }
                                 }
                             }
                         }
                     } catch (Throwable e) {
-                        E4allClient.LOGGER.warn("Dialtone DNS lookup failed for {}", serverAddress.getHost(), e);
+                        E4allClient.LOGGER.warn("Could not check '{}' for a direct connection ticket", serverAddress.getHost(), e);
                     }
                 }
                 return Optional.empty();
@@ -106,5 +122,28 @@ public class ServerNameResolverMixin {
             return instance.resolve(serverAddress).map(addr -> ResolvedServerAddress.from(new SmugglersInetSocketAddress(addr.asInetSocketAddress(), smuggledTicket)));
         }
         return instance.resolve(serverAddress);
+    }
+
+    @Unique
+    private static void e4all$smuggleTicket(ServerAddress serverAddress, String ticket) {
+        ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(ticket);
+        VoiceBridge.setPendingDialtoneTicket(ticket);
+    }
+
+    @Unique
+    private static volatile long e4all$lastRelayNoticeMs = 0L;
+
+    @Unique
+    private static void e4all$notifyRelayProblem(String key, Object... args) {
+        try {
+            if (!link.e4all.Agnos.isClient()) return;
+            long now = System.currentTimeMillis();
+            if (now - e4all$lastRelayNoticeMs < 60_000L) return;
+            e4all$lastRelayNoticeMs = now;
+            Mirror.addMessage(Mirror.withStyle(
+                    Mirror.translatable(key, args),
+                    it -> it.withColor(ChatFormatting.YELLOW)));
+        } catch (Throwable ignored) {
+        }
     }
 }

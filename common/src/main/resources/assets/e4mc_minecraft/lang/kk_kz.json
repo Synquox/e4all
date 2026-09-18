@@ -15,7 +15,6 @@
     "text.e4all_minecraft.onlineMode": "Online Mode: ",
     "text.e4all_minecraft.onlineModeTrue": "True",
     "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
-    "text.e4all_minecraft.reconnecting": "e4all: Релемен байланыс үзілді, қайта қосылу әрекеті...",
     "text.e4all_minecraft.hiddenDomain": "жасырын, көшіру үшін басыңыз",
     "text.e4all_minecraft.restartingRelay": "e4all: Перезапуск релейного соединения...",
     "text.e4all_minecraft.error.noActiveSession": "e4all: Нет активной сессии для перезапуска.",

@@ -28,6 +28,20 @@ public abstract class MixinConnection {
     @Unique
     private boolean e4all$converting = false;
 
+    // two same-shaped decorate methods exist, the narrator one must not win (it does on srg)
+    private static final String[] CHAT_DECORATION_METHOD_NAMES = {
+            "decorate",            // mojmap
+            "applyChatDecoration", // yarn
+            "method_44837",        // intermediary
+            "m_240977_"            // srg
+    };
+    private static final String[] NARRATION_DECORATION_METHOD_NAMES = {
+            "decorateNarration",
+            "applyNarrationDecoration",
+            "method_44838",
+            "m_240941_"
+    };
+
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSend1(Packet<?> packet, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
@@ -59,19 +73,8 @@ public abstract class MixinConnection {
     }
 
     private static Packet<?> e4all$toSystemChat(PacketListener listener, ClientboundPlayerChatPacket chat) {
-        ServerPlayer player = null;
-        if (listener != null) {
-            try {
-                Method getPlayerMethod = listener.getClass().getMethod("getPlayer");
-                player = (ServerPlayer) getPlayerMethod.invoke(listener);
-            } catch (Exception e1) {
-                try {
-                    player = (ServerPlayer) listener.getClass().getField("player").get(listener);
-                } catch (Exception ignored) {}
-            }
-        }
-
-        Component decorated = e4all$decorate(player, chat);
+        Component content = e4all$extractContent(chat);
+        Component decorated = e4all$decorate(listener, chat, content);
         return new ClientboundSystemChatPacket(decorated, false);
     }
 
@@ -93,45 +96,181 @@ public abstract class MixinConnection {
         return Component.literal("");
     }
 
-    private static Component e4all$decorate(ServerPlayer player, ClientboundPlayerChatPacket chat) {
+    // sender name lives in the chat type bound, matched by shape since names differ per loader
+    private static Component e4all$decorate(PacketListener listener, ClientboundPlayerChatPacket chat, Component content) {
         try {
-            // try modern 1.20+ ChatType first
-            Object bound = chat.getClass().getMethod("chatType").invoke(chat);
-            Method decorate = bound.getClass().getMethod("decorate", Component.class);
-            Component content = e4all$extractContent(chat);
-            return (Component) decorate.invoke(bound, content);
-        } catch (Throwable e) {
-            if (player != null) {
-                try {
-                    // 1.19 fallback
-                    Object chatType = chat.getClass().getMethod("chatType").invoke(chat);
-                    Object level;
-                    try {
-                        level = player.getClass().getMethod("level").invoke(player);
-                    } catch (Exception ignored) {
-                        level = player.getClass().getField("level").get(player);
+            Object chatType = e4all$chatTypeOf(chat);
+            if (chatType != null) {
+                Component decorated = e4all$invokeDecorate(chatType, content);
+                if (decorated != null) return decorated;
+                Object registryAccess = e4all$registryAccess(listener);
+                if (registryAccess != null) {
+                    Object bound = e4all$resolveChatType(chatType, registryAccess);
+                    if (bound != null) {
+                        decorated = e4all$invokeDecorate(bound, content);
+                        if (decorated != null) return decorated;
                     }
-                    Object registryAccess = level.getClass().getMethod("registryAccess").invoke(level);
-                    
-                    Method resolveMethod = null;
-                    for (Method m : chatType.getClass().getMethods()) {
-                        if (m.getName().equals("resolve") && m.getParameterCount() == 1) {
-                            resolveMethod = m;
+                }
+            }
+        } catch (Throwable t) {
+            link.e4all.E4allClient.LOGGER.debug("e4all: could not decorate a chat message with its chat type", t);
+        }
+
+        Component withSender = e4all$decorateWithSender(listener, chat, content);
+        if (withSender != null) {
+            link.e4all.E4allClient.LOGGER.debug("e4all: chat type decoration unavailable, used the sender name instead");
+            return withSender;
+        }
+        link.e4all.E4allClient.LOGGER.debug("e4all: no chat decoration available, sending the raw content");
+        return content;
+    }
+
+    private static Object e4all$chatTypeOf(Object chat) {
+        for (Method m : chat.getClass().getMethods()) {
+            if (m.getParameterCount() != 0) continue;
+            Class<?> ret = m.getReturnType();
+            if (ret.isPrimitive() || ret == void.class || ret == String.class
+                    || ret == Class.class || ret == Object.class) continue;
+            String name = ret.getName();
+            if (!name.contains("Bound") && !name.contains("ChatType")) continue;
+            try {
+                m.setAccessible(true);
+                Object value = m.invoke(chat);
+                if (value != null) return value;
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    private static boolean e4all$isNarrationDecoration(String methodName) {
+        if (methodName.toLowerCase(java.util.Locale.ROOT).contains("narration")) return true;
+        for (String name : NARRATION_DECORATION_METHOD_NAMES) {
+            if (name.equals(methodName)) return true;
+        }
+        return false;
+    }
+
+    private static Component e4all$invokeDecorate(Object chatType, Component content) {
+        // known names first: a shape only lookup cannot tell the chat decoration from the narrator one
+        for (String name : CHAT_DECORATION_METHOD_NAMES) {
+            try {
+                Method m = chatType.getClass().getMethod(name, Component.class);
+                Object value = m.invoke(chatType, content);
+                if (value instanceof Component component) return component;
+            } catch (Throwable ignored) {}
+        }
+
+        // unknown mapping: only trust a shape match when a single non narrator candidate is left
+        Method candidate = null;
+        for (Method m : chatType.getClass().getMethods()) {
+            if (m.getDeclaringClass() == Object.class) continue;
+            if (m.getParameterCount() != 1) continue;
+            if (!Component.class.isAssignableFrom(m.getParameterTypes()[0])) continue;
+            if (!Component.class.isAssignableFrom(m.getReturnType())) continue;
+            if (e4all$isNarrationDecoration(m.getName())) continue;
+            if (candidate != null) {
+                link.e4all.E4allClient.LOGGER.debug(
+                        "e4all: chat decoration of {} is ambiguous ({} / {}), using the sender name instead",
+                        chatType.getClass().getName(), candidate.getName(), m.getName());
+                return null;
+            }
+            candidate = m;
+        }
+        if (candidate == null) return null;
+        try {
+            candidate.setAccessible(true);
+            Object value = candidate.invoke(chatType, content);
+            if (value instanceof Component component) return component;
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    private static Object e4all$resolveChatType(Object chatType, Object registryAccess) {
+        for (Method m : chatType.getClass().getMethods()) {
+            if (m.getDeclaringClass() == Object.class) continue;
+            if (m.getParameterCount() != 1) continue;
+            if (m.getReturnType() == void.class) continue;
+            Class<?> param = m.getParameterTypes()[0];
+            if (param == Object.class || !param.isInstance(registryAccess)) continue;
+            try {
+                m.setAccessible(true);
+                Object resolved = m.invoke(chatType, registryAccess);
+                if (resolved instanceof java.util.Optional<?> optional) return optional.orElse(null);
+                if (resolved != null) return resolved;
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    private static Object e4all$registryAccess(PacketListener listener) {
+        try {
+            ServerPlayer player = link.e4all.voice.VoiceControl.extractServerPlayer(listener);
+            if (player != null) {
+                Object level = e4all$noArgObjectNamed(player, "Level");
+                Object access = e4all$noArgObjectNamed(level, "RegistryAccess");
+                if (access != null) return access;
+            }
+            return e4all$noArgObjectNamed(link.e4all.voice.VoiceControl.extractServerFromListener(listener),
+                    "RegistryAccess");
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static Object e4all$noArgObjectNamed(Object target, String returnTypeFragment) {
+        if (target == null) return null;
+        for (Method m : target.getClass().getMethods()) {
+            if (m.getParameterCount() != 0) continue;
+            Class<?> ret = m.getReturnType();
+            if (ret.isPrimitive() || ret == void.class || ret == String.class
+                    || ret == Class.class || ret == Object.class) continue;
+            if (!ret.getName().contains(returnTypeFragment)) continue;
+            try {
+                m.setAccessible(true);
+                Object value = m.invoke(target);
+                if (value != null) return value;
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    // last resort: rebuild the vanilla "<name> message" decoration from the sender uuid
+    private static Component e4all$decorateWithSender(PacketListener listener, Object chat, Component content) {
+        try {
+            java.util.UUID sender = e4all$senderOf(chat);
+            if (sender == null) return null;
+            ServerPlayer senderPlayer = null;
+            ServerPlayer self = link.e4all.voice.VoiceControl.extractServerPlayer(listener);
+            if (self != null && sender.equals(self.getUUID())) {
+                senderPlayer = self;
+            }
+            if (senderPlayer == null) {
+                Object server = link.e4all.voice.VoiceControl.extractServerFromListener(listener);
+                if (server instanceof net.minecraft.server.MinecraftServer minecraftServer) {
+                    for (ServerPlayer candidate : minecraftServer.getPlayerList().getPlayers()) {
+                        if (sender.equals(candidate.getUUID())) {
+                            senderPlayer = candidate;
                             break;
                         }
                     }
-                    
-                    if (resolveMethod != null) {
-                        Object resolved = resolveMethod.invoke(chatType, registryAccess);
-                        Object chatTypeInstance = resolved.getClass().getMethod("get").invoke(resolved);
-                        Component content = e4all$extractContent(chat);
-                        return (Component) chatTypeInstance.getClass().getMethod("decorate", Component.class).invoke(chatTypeInstance, content);
-                    }
-                } catch (Throwable ignored) {}
+                }
             }
-            
-            // just plain text fallback
-            return e4all$extractContent(chat);
+            if (senderPlayer == null) return null;
+            return link.e4all.Mirror.translatable("chat.type.text", senderPlayer.getDisplayName(), content);
+        } catch (Throwable t) {
+            return null;
         }
+    }
+
+    private static java.util.UUID e4all$senderOf(Object chat) {
+        for (Method m : chat.getClass().getMethods()) {
+            if (m.getParameterCount() != 0 || m.getReturnType() != java.util.UUID.class) continue;
+            try {
+                m.setAccessible(true);
+                Object value = m.invoke(chat);
+                if (value instanceof java.util.UUID uuid) return uuid;
+            } catch (Throwable ignored) {}
+        }
+        return null;
     }
 }

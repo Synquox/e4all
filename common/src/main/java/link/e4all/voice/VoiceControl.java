@@ -111,7 +111,13 @@ public final class VoiceControl {
             E4allClient.LOGGER.warn("e4all voice: could not get server from player");
             return;
         }
-        server.execute(() -> dispatchServerMessage(player, data));
+        server.execute(() -> {
+            try {
+                dispatchServerMessage(player, data);
+            } catch (Throwable t) {
+                E4allClient.LOGGER.warn("e4all voice: control message dispatch failed for {}", player.getScoreboardName(), t);
+            }
+        });
     }
 
     public static void handleServerPayload(Object listener, byte[] data) {

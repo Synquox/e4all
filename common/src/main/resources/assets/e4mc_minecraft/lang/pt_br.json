@@ -15,7 +15,6 @@
     "text.e4all_minecraft.onlineMode": "Online Mode: ",
     "text.e4all_minecraft.onlineModeTrue": "True",
     "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
-    "text.e4all_minecraft.reconnecting": "e4all: Conexão com o relé perdida, tentando reconectar...",
     "text.e4all_minecraft.hiddenDomain": "oculto, clique para copiar",
     "text.e4all_minecraft.restartingRelay": "e4all: Reiniciando conexão do relay...",
     "text.e4all_minecraft.error.noActiveSession": "e4all: Nenhuma sessão ativa para reiniciar.",

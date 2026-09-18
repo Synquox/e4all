@@ -3,6 +3,7 @@ package link.e4all.mixin;
 import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.Mirror;
+import link.e4all.QuiclimeSession;
 import link.e4all.ServerStartupTracker;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -49,7 +50,7 @@ public abstract class PlayerListMixin {
         }
     }
 
-    // reject logins while the integrated server is mid-(re)init
+    // guests only into a world that is running, belongs to the active relay session and has the host in it
     @Inject(method = "canPlayerLogin", at = @At("HEAD"), cancellable = true, require = 0)
     public void e4all$gateStartupLogins(SocketAddress socketAddress, @Coerce Object gameProfile, CallbackInfoReturnable<Component> cir) {
         if (cir.isCancelled()) return;
@@ -58,9 +59,30 @@ public abstract class PlayerListMixin {
             return; // local/owner logins are fine
         }
         if (server == null || server.isDedicatedServer()) return;
-        if (ServerStartupTracker.isStarting(server) || ServerStartupTracker.isMidFirstTick(server)) {
-            E4allClient.LOGGER.info("e4all: rejecting login during integrated server (re)init");
-            cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
+
+        try {
+            QuiclimeSession session = E4allClient.session;
+            if (session != null && !session.ownsServer(server)) {
+                E4allClient.LOGGER.info("e4all: rejecting guest login, the relay session belongs to another world ({})",
+                        ServerStartupTracker.describe(server));
+                cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
+                return;
+            }
+            if (ServerStartupTracker.isStarting(server)
+                    || ServerStartupTracker.isMidFirstTick(server)
+                    || ServerStartupTracker.isStopping(server)) {
+                E4allClient.LOGGER.info("e4all: rejecting guest login, world is (re)starting or stopping ({})",
+                        ServerStartupTracker.describe(server));
+                cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
+                return;
+            }
+            if (!ServerStartupTracker.hasAnyPlayer(server)) {
+                E4allClient.LOGGER.info("e4all: rejecting guest login, the host is not in the world yet ({})",
+                        ServerStartupTracker.describe(server));
+                cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.hostNotReady"));
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.warn("e4all: login gate check failed", t);
         }
     }
 
@@ -75,6 +97,6 @@ public abstract class PlayerListMixin {
             if (Mirror.isSingleplayerOwnerObj(getServer(), gameProfile)) {
                 cir.setReturnValue(null);
             }
-        } catch (RuntimeException ignored) {}
+        } catch (Throwable ignored) {}
     }
 }

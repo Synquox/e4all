@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -70,6 +71,27 @@ public final class PacketHelper {
             }
         }
         return null;
+    }
+
+    // legacy payloads are matched by class name, mojmap on forge and intermediary on fabric
+    public static boolean isClientboundCustomPayloadPacket(Object packet) {
+        return matchesPacketClass(packet, CLIENTBOUND_PACKET_CLASS_NAMES);
+    }
+
+    public static boolean isServerboundCustomPayloadPacket(Object packet) {
+        return matchesPacketClass(packet, SERVERBOUND_PACKET_CLASS_NAMES);
+    }
+
+    private static boolean matchesPacketClass(Object packet, String[] candidates) {
+        if (packet == null) return false;
+        String name = packet.getClass().getName();
+        String simple = packet.getClass().getSimpleName();
+        for (String candidate : candidates) {
+            if (name.equals(candidate)) return true;
+            int dot = candidate.lastIndexOf('.');
+            if (dot > 0 && simple.equals(candidate.substring(dot + 1))) return true;
+        }
+        return false;
     }
 
     public static Object extractPayloadId(Object payload) {
@@ -222,7 +244,19 @@ public final class PacketHelper {
         return null;
     }
 
+    private static final ThreadLocal<Throwable> LAST_TEST_FAILURE = new ThreadLocal<>();
+
+    public static Throwable lastTestFailure() {
+        return LAST_TEST_FAILURE.get();
+    }
+
+    private static boolean testFailed(Throwable cause) {
+        LAST_TEST_FAILURE.set(cause);
+        return false;
+    }
+
     public static boolean testEncode(Packet<?> pkt) {
+        LAST_TEST_FAILURE.remove();
         if (pkt == null) return false;
         ByteBuf rawBuf = Unpooled.buffer();
         boolean tested = false;
@@ -250,7 +284,7 @@ public final class PacketHelper {
                                         return true;
                                     } catch (java.lang.reflect.InvocationTargetException ite) {
                                         LOGGER.debug("e4all: static codec testEncode failed: {}", ite.getCause());
-                                        return false;
+                                        return testFailed(ite.getCause());
                                     } catch (Throwable ignored) {}
                                 }
                             }
@@ -278,7 +312,7 @@ public final class PacketHelper {
                                                     return true;
                                                 } catch (java.lang.reflect.InvocationTargetException ite) {
                                                     LOGGER.debug("e4all: packetType codec testEncode failed: {}", ite.getCause());
-                                                    return false;
+                                                    return testFailed(ite.getCause());
                                                 } catch (Throwable ignored) {}
                                             }
                                         }
@@ -300,13 +334,14 @@ public final class PacketHelper {
                         return true;
                     } catch (java.lang.reflect.InvocationTargetException ite) {
                         LOGGER.debug("e4all: legacy write testEncode failed: {}", ite.getCause());
-                        return false;
+                        return testFailed(ite.getCause());
                     } catch (Throwable ignored) {}
                 }
             }
 
             if (findClass(PAYLOAD_INTERFACE_NAMES) != null || findClass(DISCARDED_PAYLOAD_CLASS_NAMES) != null) {
-                return tested;
+                if (tested) return true;
+                return testFailed(new IllegalStateException("no encoder found for " + cls.getName()));
             }
 
             return true;
@@ -318,12 +353,24 @@ public final class PacketHelper {
     public static void sendClientbound(ServerPlayer player, Object channel, byte[] data) {
         try {
             Packet<?> pkt = makePacket(true, channel, data);
-            if (pkt != null) {
-                if (!testEncode(pkt)) {
-                    LOGGER.debug("e4all: payload {} cannot be encoded by server packet codec; skipping", channel);
-                    if (!VoiceControlPayload.isOwnChannel(channel)) return;
+            if (pkt == null) {
+                if (VoiceControlPayload.isOwnChannel(channel)) {
+                    LOGGER.warn("e4all: could not build a clientbound packet for {} - control payload dropped", channel);
                 }
-                player.connection.send(pkt);
+                return;
+            }
+            if (!testEncode(pkt)) {
+                if (!VoiceControlPayload.isOwnChannel(channel)) {
+                    LOGGER.debug("e4all: payload {} cannot be encoded by server packet codec; skipping", channel);
+                    return;
+                }
+                // own channel has to go out either way, log why the codec rejected it
+                LOGGER.warn("e4all: payload {} failed the codec test, sending it anyway", channel, lastTestFailure());
+            }
+            Packet<?> fresh = makePacket(true, channel, data);
+            if (fresh != null) pkt = fresh;
+            if (!sendPacket(connectionOf(player), pkt)) {
+                LOGGER.warn("e4all: could not deliver clientbound payload {} to {}", channel, player.getScoreboardName());
             }
         } catch (Throwable t) {
             LOGGER.warn("e4all: failed to send clientbound payload {}", channel, t);
@@ -333,16 +380,90 @@ public final class PacketHelper {
     public static void sendServerbound(Connection connection, Object channel, byte[] data) {
         try {
             Packet<?> pkt = makePacket(false, channel, data);
-            if (pkt != null) {
-                if (!testEncode(pkt)) {
-                    LOGGER.debug("e4all: payload {} cannot be encoded by client packet codec; skipping", channel);
-                    if (!VoiceControlPayload.isOwnChannel(channel)) return;
+            if (pkt == null) {
+                if (VoiceControlPayload.isOwnChannel(channel)) {
+                    LOGGER.warn("e4all: could not build a serverbound packet for {} - control payload dropped", channel);
                 }
-                connection.send(pkt);
+                return;
             }
+            if (!testEncode(pkt)) {
+                if (!VoiceControlPayload.isOwnChannel(channel)) {
+                    LOGGER.debug("e4all: payload {} cannot be encoded by client packet codec; skipping", channel);
+                    return;
+                }
+                // own channel has to go out either way, log why the codec rejected it
+                LOGGER.warn("e4all: payload {} failed the codec test, sending it anyway", channel, lastTestFailure());
+            }
+            Packet<?> fresh = makePacket(false, channel, data);
+            if (fresh != null) pkt = fresh;
+            sendPacket(connection, pkt);
         } catch (Throwable t) {
             LOGGER.warn("e4all: failed to send serverbound payload {}", channel, t);
         }
+    }
+
+    // send(Packet) has a different srg name per version, so match it by signature
+    public static boolean sendPacket(Object connection, Packet<?> pkt) {
+        if (connection == null || pkt == null) return false;
+        Throwable lastCause = null;
+        for (Method m : connection.getClass().getMethods()) {
+            if (m.getReturnType() != void.class) continue;
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length != 1 || p[0] == Object.class) continue;
+            if (!p[0].isAssignableFrom(pkt.getClass())) continue;
+            try {
+                m.setAccessible(true);
+                m.invoke(connection, pkt);
+                return true;
+            } catch (java.lang.reflect.InvocationTargetException ite) {
+                lastCause = ite.getCause() != null ? ite.getCause() : ite;
+                break;
+            } catch (Throwable ignored) {
+            }
+        }
+        if (lastCause != null) {
+            LOGGER.warn("e4all: packet send via {} failed", connection.getClass().getName(), lastCause);
+        } else {
+            LOGGER.warn("e4all: no packet send method found on {}", connection.getClass().getName());
+        }
+        return false;
+    }
+
+    // resolve the player's game connection, tolerating SRG/mapping differences
+    public static Object connectionOf(ServerPlayer player) {
+        if (player == null) return null;
+        try {
+            return player.connection;
+        } catch (Throwable ignored) {
+        }
+        for (Class<?> c = player.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                try {
+                    f.setAccessible(true);
+                    Object value = f.get(player);
+                    if (value != null && hasPacketSendMethod(value.getClass())) return value;
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean hasPacketSendMethod(Class<?> cls) {
+        for (Method m : cls.getMethods()) {
+            if (m.getReturnType() != void.class) continue;
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length != 1 || p[0] == Object.class) continue;
+            if (p[0].isInterface() && isPacketType(p[0])) return true;
+        }
+        return false;
+    }
+
+    private static boolean isPacketType(Class<?> type) {
+        String n = type.getName();
+        return n.equals("net.minecraft.network.protocol.Packet")
+                || n.equals("net.minecraft.network.packet.Packet")
+                || n.equals("net.minecraft.class_2596");
     }
 
     private static Object makeDiscardedPayload(Object channel, byte[] data) {
@@ -428,22 +549,30 @@ public final class PacketHelper {
             }
         }
 
-        // legacy 1.18 - 1.20.1 constructor fallback
+        // 1.18 - 1.20.1 ctor fallback. the packet keeps the buffer by reference, so it must
+        // stay alive until it is encoded (releasing it kicked guests seconds after joining)
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(payloadData));
+        boolean handedOff = false;
         try {
             for (Constructor<?> ctor : pktCls.getDeclaredConstructors()) {
                 try {
                     ctor.setAccessible(true);
                     Class<?>[] p = ctor.getParameterTypes();
-                    if (p.length == 2 && isResourceLoc(p[0]) && FriendlyByteBuf.class.isAssignableFrom(p[1])) {
-                        return (Packet<?>) ctor.newInstance(channel, buf);
+                    boolean byteData = p.length == 2 && isResourceLoc(p[0]) && p[1] == byte[].class;
+                    boolean bufData = p.length == 2 && isResourceLoc(p[0]) && FriendlyByteBuf.class.isAssignableFrom(p[1]);
+                    if (byteData || bufData) {
+                        Packet<?> legacyPacket = (Packet<?>) ctor.newInstance(channel, byteData ? payloadData : buf);
+                        handedOff = true;
+                        return legacyPacket;
                     }
                 } catch (Throwable t) {
                     LOGGER.debug("Failed constructing legacy packet", t);
                 }
             }
         } finally {
-            buf.release();
+            if (!handedOff) {
+                buf.release();
+            }
         }
 
         return null;

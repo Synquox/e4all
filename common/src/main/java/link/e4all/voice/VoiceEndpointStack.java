@@ -2,6 +2,7 @@ package link.e4all.voice;
 
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import link.e4all.AndroidDetector;
 import link.e4all.AndroidNatives;
 import link.e4all.E4allClient;
@@ -16,7 +17,8 @@ import java.nio.charset.StandardCharsets;
 public final class VoiceEndpointStack {
     public static final VoiceEndpointStack INSTANCE = new VoiceEndpointStack();
 
-    private final EventLoopGroup group = new DefaultEventLoopGroup(1);
+    private final EventLoopGroup group = new DefaultEventLoopGroup(1,
+            new DefaultThreadFactory("e4all-voice-client", true));
     private volatile Endpoint endpoint;
     private volatile Thread dispatcher;
 

@@ -2,6 +2,7 @@ package link.e4all.dialtone;
 
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import link.e4all.AndroidDetector;
 import link.e4all.AndroidNatives;
 import link.e4all.E4allClient;
@@ -14,7 +15,8 @@ import java.nio.charset.StandardCharsets;
 public class DialtoneAmbientSession {
     public static final DialtoneAmbientSession INSTANCE = new DialtoneAmbientSession();
 
-    public EventLoopGroup group = new DefaultEventLoopGroup();
+    public EventLoopGroup group = new DefaultEventLoopGroup(
+            new DefaultThreadFactory("e4all-dialtone", true));
     volatile Endpoint endpoint;
     volatile Thread dispatcher;
 

@@ -9,7 +9,8 @@ public enum VoiceFailure {
     NO_SHARED_ADDRESS_FAMILY(5, "no_shared_af", "text.e4all_minecraft.voice.fail.noSharedAf"),
     UPNP_DENIED(6, "upnp_denied", "text.e4all_minecraft.voice.fail.upnpDenied"),
     FIREWALL(7, "firewall", "text.e4all_minecraft.voice.fail.firewall"),
-    TRANSPORT_UNAVAILABLE(8, "transport_unavailable", "text.e4all_minecraft.voice.fail.transportUnavailable");
+    TRANSPORT_UNAVAILABLE(8, "transport_unavailable", "text.e4all_minecraft.voice.fail.transportUnavailable"),
+    NEGOTIATION_TIMEOUT(9, "negotiation_timeout", "text.e4all_minecraft.voice.fail.negotiationTimeout");
 
     public final int ordinal;
     public final String logTag;

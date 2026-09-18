@@ -2,16 +2,21 @@ package link.e4all.dialtone;
 
 import io.netty.channel.AbstractServerChannel;
 import io.netty.channel.ChannelConfig;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultChannelConfig;
 import io.netty.channel.EventLoop;
 import link.e4all.AndroidDetector;
 import link.e4all.AndroidNatives;
+import link.e4all.Agnos;
 import link.e4all.E4allClient;
+import link.e4all.Mirror;
 import link.e4all.QuiclimeSession;
 import link.e4mc.iroh.Endpoint;
 import link.e4mc.iroh.NativeException;
 import link.e4mc.iroh.Resolvable;
+import net.minecraft.ChatFormatting;
 
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +48,7 @@ public class DialtoneServerChannel extends AbstractServerChannel {
     Thread dispatcher;
     volatile boolean closed = false;
     boolean voiceMode = false;
+    private long lastEndpointErrorChatMs = 0L;
 
     @Override
     protected boolean isCompatible(EventLoop loop) {
@@ -100,6 +106,12 @@ public class DialtoneServerChannel extends AbstractServerChannel {
         }, "Dialtone Server Dispatcher");
         this.dispatcher.setDaemon(true);
         this.dispatcher.start();
+        pipeline().addLast(new ChannelInboundHandlerAdapter() {
+            @Override
+            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                e4all$reportEndpointError(cause);
+            }
+        });
         endpoint.watchAddress(new Resolvable<>() {
             @Override
             public void resolve(String addr) {
@@ -209,5 +221,30 @@ public class DialtoneServerChannel extends AbstractServerChannel {
     @Override
     public boolean isActive() {
         return !closed && endpoint != null;
+    }
+
+    private void e4all$reportEndpointError(Throwable cause) {
+        E4allClient.LOGGER.warn("e4all {}: dialtone endpoint error: {}",
+                voiceMode ? "voice" : "game", cause == null ? "unknown" : cause.toString());
+        try {
+            if (!Agnos.isClient()) return;
+            if (!voiceMode) return;
+            Throwable nativeCause = cause;
+            while (nativeCause != null && !(nativeCause instanceof NativeException)) {
+                nativeCause = nativeCause.getCause();
+            }
+            if (nativeCause == null) return;
+            long now = System.currentTimeMillis();
+            if (now - lastEndpointErrorChatMs < 60_000L) return;
+            lastEndpointErrorChatMs = now;
+            String detail = nativeCause.getMessage() == null
+                    ? nativeCause.getClass().getSimpleName()
+                    : nativeCause.getMessage();
+            Mirror.addMessage(Mirror.withStyle(
+                    Mirror.translatable("text.e4all_minecraft.voice.endpointLost", detail),
+                    it -> it.withColor(ChatFormatting.RED)));
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: could not report dialtone endpoint error", t);
+        }
     }
 }

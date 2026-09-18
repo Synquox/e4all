@@ -15,7 +15,6 @@
     "text.e4all_minecraft.onlineMode": "Online Mode: ",
     "text.e4all_minecraft.onlineModeTrue": "True",
     "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
-    "text.e4all_minecraft.reconnecting": "e4all: 릴레이 연결이 끊어졌습니다, 재연결 시도 중...",
     "text.e4all_minecraft.hiddenDomain": "숨겨짐, 클릭하여 복사",
     "text.e4all_minecraft.restartingRelay": "e4all: 릴레이 연결을 재시작하는 중...",
     "text.e4all_minecraft.error.noActiveSession": "e4all: 재시작할 활성 세션이 없습니다.",

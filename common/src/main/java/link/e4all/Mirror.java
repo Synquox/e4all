@@ -107,10 +107,11 @@ public class Mirror {
             "m_52402_",
             "isOwner"
     };
+    // no intermediary names here: "method_3823" resolves to initServer() on 1.21.x and
+    // invoking it re-inits the world mid-login
     private static final String[] GET_SINGLEPLAYER_NAME_METHOD_NAMES = {
             "getSingleplayerName",
             "getSinglePlayerName",
-            "method_3823",
             "m_129792_",
             "getHostProfile",
             "getSingleplayerProfile"
@@ -422,6 +423,19 @@ public class Mirror {
         E4allClient.LOGGER.warn("Could not send message to command source via any known method mapping: {}", message);
     }
 
+    private static boolean isSafeNoArgGetter(Method m) {
+        if (m == null || m.getParameterCount() != 0) return false;
+        String n = m.getName();
+        if (n.startsWith("init") || n.startsWith("load") || n.startsWith("start")
+                || n.startsWith("stop") || n.startsWith("shutdown") || n.startsWith("reload")
+                || n.startsWith("create") || n.startsWith("save") || n.startsWith("run")
+                || n.startsWith("tick") || n.startsWith("set") || n.startsWith("close")) return false;
+        Class<?> r = m.getReturnType();
+        return r == String.class
+                || r == com.mojang.authlib.GameProfile.class
+                || r == UUID.class;
+    }
+
     public static boolean isSingleplayerOwner(MinecraftServer server, ServerPlayer player) {
         if (server == null || player == null) return false;
         for (String name : PLAYER_IS_SINGLEPLAYER_OWNER_METHOD_NAMES) {
@@ -483,7 +497,7 @@ public class Mirror {
             for (String name : GET_SINGLEPLAYER_NAME_METHOD_NAMES) {
                 try {
                     Method m = sc.getMethod(name);
-                    if (m.getParameterCount() == 0) {
+                    if (isSafeNoArgGetter(m)) {
                         Object res = m.invoke(server);
                         if (res instanceof String sName && !sName.isEmpty()) {
                             String pName = null;
@@ -589,6 +603,36 @@ public class Mirror {
         UUID targetId = getProfileId(maybeProfile);
         String targetName = getProfileName(maybeProfile);
 
+        try {
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) {
+                if (client.getUser() != null) {
+                    try {
+                        UUID clientUuid = client.getUser().getProfileId();
+                        if (clientUuid != null && clientUuid.equals(targetId)) return true;
+                    } catch (Throwable ignored) {}
+                    try {
+                        String clientName = client.getUser().getName();
+                        if (clientName != null && clientName.equalsIgnoreCase(targetName)) return true;
+                    } catch (Throwable ignored) {}
+                    try {
+                        Method m = client.getUser().getClass().getMethod("getGameProfile");
+                        Object clientProfile = m.invoke(client.getUser());
+                        if (clientProfile != null) {
+                            UUID cId = getProfileId(clientProfile);
+                            if (targetId != null && targetId.equals(cId)) return true;
+                            String cName = getProfileName(clientProfile);
+                            if (targetName != null && targetName.equalsIgnoreCase(cName)) return true;
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                if (client.player != null) {
+                    if (targetId != null && targetId.equals(client.player.getUUID())) return true;
+                    if (targetName != null && targetName.equalsIgnoreCase(client.player.getScoreboardName())) return true;
+                }
+            }
+        } catch (Throwable ignored) {}
+
         Class<?>[] serverClasses = new Class<?>[]{server.getClass(), MinecraftServer.class};
         for (Class<?> sc : serverClasses) {
             for (Method m : sc.getMethods()) {
@@ -624,7 +668,7 @@ public class Mirror {
             for (String name : GET_SINGLEPLAYER_NAME_METHOD_NAMES) {
                 try {
                     Method m = sc.getMethod(name);
-                    if (m.getParameterCount() == 0) {
+                    if (isSafeNoArgGetter(m)) {
                         Object res = m.invoke(server);
                         if (res instanceof String sName && !sName.isEmpty()) {
                             if (targetName != null && targetName.equalsIgnoreCase(sName)) return true;
@@ -645,36 +689,6 @@ public class Mirror {
                 } catch (Throwable ignored) {}
             }
         }
-
-        try {
-            Minecraft client = Minecraft.getInstance();
-            if (client != null) {
-                if (client.getUser() != null) {
-                    try {
-                        UUID clientUuid = client.getUser().getProfileId();
-                        if (clientUuid != null && clientUuid.equals(targetId)) return true;
-                    } catch (Throwable ignored) {}
-                    try {
-                        String clientName = client.getUser().getName();
-                        if (clientName != null && clientName.equalsIgnoreCase(targetName)) return true;
-                    } catch (Throwable ignored) {}
-                    try {
-                        Method m = client.getUser().getClass().getMethod("getGameProfile");
-                        Object clientProfile = m.invoke(client.getUser());
-                        if (clientProfile != null) {
-                            UUID cId = getProfileId(clientProfile);
-                            if (targetId != null && targetId.equals(cId)) return true;
-                            String cName = getProfileName(clientProfile);
-                            if (targetName != null && targetName.equalsIgnoreCase(cName)) return true;
-                        }
-                    } catch (Throwable ignored) {}
-                }
-                if (client.player != null) {
-                    if (targetId != null && targetId.equals(client.player.getUUID())) return true;
-                    if (targetName != null && targetName.equalsIgnoreCase(client.player.getScoreboardName())) return true;
-                }
-            }
-        } catch (Throwable ignored) {}
 
         try {
             if (!server.isDedicatedServer()) {

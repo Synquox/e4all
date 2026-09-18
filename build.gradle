@@ -22,7 +22,7 @@ subprojects {
 
     tasks.register("packageAndroidNatives") {
         group = "build"
-        description = "Removes Android Bionic natives and netty dns classes from release jars and produces -android variants with them bundled."
+        description = "Removes Android Bionic natives from release jars and produces -android variants with them bundled."
         def projectName = project.name
         def libsDir = project.layout.buildDirectory.dir("libs").get().asFile
         doLast {
@@ -33,8 +33,8 @@ subprojects {
             def nativesRoot = rootProject.file("common/src/main/resources/assets/e4all/natives")
             def releaseJars = libsDir.listFiles().findAll { it.name.endsWith(".jar") &&
                     !(it.name ==~ /.*(dev|sources|shadow|slim|android).*\.jar/) }
-            // entries that are only ever needed on Android: Bionic natives + netty dns
-            def androidOnlyPrefixes = ["assets/e4all/natives/android-", "io/netty/resolver/dns/", "io/netty/handler/codec/dns/"]
+            // android-only entries: just the bionic natives now, dns classes are gone
+            def androidOnlyPrefixes = ["assets/e4all/natives/android-"]
             def newestNative = 0L
             nativesRoot.eachFileRecurse(groovy.io.FileType.FILES) { f ->
                 newestNative = Math.max(newestNative, f.lastModified())
@@ -71,9 +71,7 @@ subprojects {
                 // Release jar: repack without the Android-only entries (no-op if already slim).
                 def zin = new java.util.zip.ZipFile(jar)
                 def zout = new java.util.zip.ZipOutputStream(new FileOutputStream(tmp))
-                // -android variant: keeps everything except the Android natives (so the
-                // netty dns classes stay in), plus only aarch64 natives
-                // (x86_64 Android is emulator-only; those stay in the repo resources)
+                // -android variant: same classes as release, plus only aarch64 natives (x86_64 android is emulator-only)
                 def aout = new java.util.zip.ZipOutputStream(new FileOutputStream(tmpAndroid))
                 zin.entries().each { entry ->
                     if (!entry.name.startsWith("assets/e4all/natives/android-")) {
@@ -106,7 +104,7 @@ subprojects {
                 aout.close()
                 java.nio.file.Files.move(tmp.toPath(), jar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                 java.nio.file.Files.move(new File(libsDir, base + ".tmp-android.jar").toPath(), androidJar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                println("e4all: slimmed " + jar.name + "; produced " + androidJar.name + " (natives + dns bundled)")
+                println("e4all: slimmed " + jar.name + "; produced " + androidJar.name + " (natives bundled)")
             }
         }
     }

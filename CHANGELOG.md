@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.1
+
+- Added 26.3 support.
+- Fixed guests getting kicked a few seconds after joining on 1.18-1.20.1.
+- Fixed voice chat on 1.18-1.20.1 and missing chat names on 1.20.1.
+- Fixed hosting crashes on 1.18-1.20.4 and Android.
+- Direct connections now fall back to the relay if they fail.
+- Fixed "Timed out" issue only happening on 1.21.1
 ## 2.1.0
 
 ### Bug Fixes

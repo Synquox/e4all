@@ -25,18 +25,26 @@ public final class ClientVoiceNegotiator {
 
     private static final long CONNECT_TIMEOUT_MS = 20_000;
     private static final int MAX_QUEUED_PACKETS = 256;
+    private static final long HELLO_TIMEOUT_MS = 10_000;
+    private static final int MAX_HELLO_RETRIES = 1;
 
     private volatile DialtoneChannel voiceChannel;
     private volatile boolean negotiating = false;
     private volatile boolean connectedMessageShown = false;
     private final AtomicReference<LinkedBlockingQueue<VoiceDataPacket>> receiveQueue = new AtomicReference<>();
+    private final java.util.concurrent.atomic.AtomicLong helloGeneration = new java.util.concurrent.atomic.AtomicLong();
+    private volatile boolean offerSeen = false;
+    private volatile int helloRetries = 0;
 
     private ClientVoiceNegotiator() {}
 
     public void sendHello() {
         boolean hasVoiceClient = hasSvc();
+        offerSeen = false;
+        helloRetries = 0;
         E4allClient.LOGGER.info("e4all voice: sending HELLO (hasVoiceClient={})", hasVoiceClient);
         VoiceControl.sendToServer(VoiceControl.encodeHello(hasVoiceClient));
+        scheduleHelloWatchdog();
         if (hasVoiceClient && !AndroidDetector.isAndroid()) {
             CompletableFuture.runAsync(() -> {
                 try {
@@ -48,8 +56,35 @@ public final class ClientVoiceNegotiator {
         }
     }
 
+    private void scheduleHelloWatchdog() {
+        final long generation = helloGeneration.incrementAndGet();
+        CompletableFuture.delayedExecutor(HELLO_TIMEOUT_MS, TimeUnit.MILLISECONDS).execute(() -> {
+            if (helloGeneration.get() != generation) return;
+            onHelloTimeout();
+        });
+    }
+
+    private void onHelloTimeout() {
+        DialtoneChannel ch = voiceChannel;
+        if (ch != null && ch.isActive()) return;
+        E4allClient.LOGGER.warn(
+                "e4all voice: no OFFER from the host {} ms after HELLO (offerSeen={}, retries={}) - the e4all:voice control channel is not getting through; "
+                        + "check that both players run the same e4all build for this Minecraft version",
+                HELLO_TIMEOUT_MS, offerSeen, helloRetries);
+        if (helloRetries >= MAX_HELLO_RETRIES) {
+            showFailure(VoiceFailure.NEGOTIATION_TIMEOUT);
+            return;
+        }
+        helloRetries++;
+        E4allClient.LOGGER.info("e4all voice: re-sending HELLO (retry {} of {})", helloRetries, MAX_HELLO_RETRIES);
+        VoiceControl.sendToServer(VoiceControl.encodeHello(hasSvc()));
+        scheduleHelloWatchdog();
+    }
+
     public void onOffer(byte transport, String ticket, List<String> candidates,
                         VoiceFailure failure) {
+        offerSeen = true;
+        helloGeneration.incrementAndGet();
         E4allClient.LOGGER.info("e4all voice: OFFER received (transport={}, ticket={}, candidates={}, failure={})",
                 transport, ticket.isEmpty() ? "<none>" : ticket.substring(0, Math.min(20, ticket.length())) + "...",
                 candidates.size(), failure != null ? failure.logTag : "none");
@@ -225,6 +260,8 @@ public final class ClientVoiceNegotiator {
     public void stop() {
         connectedMessageShown = false;
         negotiating = false;
+        offerSeen = false;
+        helloGeneration.incrementAndGet();
         DialtoneChannel ch = voiceChannel;
         voiceChannel = null;
         if (ch != null) {

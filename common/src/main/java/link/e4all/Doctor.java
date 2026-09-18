@@ -57,6 +57,28 @@ public class Doctor {
         if (dialtoneNativeUrl != null) {
             result.append("  link.e4mc.dialtone.native_url: ").append(dialtoneNativeUrl).append("\n");
         }
+        result.append("dns test results:\n");
+        result.append("  ").append(NetDns.describeResolver()).append("\n");
+        String dnsHost = "broker.e4mc.link";
+        try {
+            var brokerHost = new URI(Config.INSTANCE.brokerUrl.value()).getHost();
+            if (brokerHost != null && !brokerHost.isEmpty()) {
+                dnsHost = brokerHost;
+            }
+        } catch (Exception ignored) {}
+        try {
+            long dnsStart = System.nanoTime();
+            var dnsAddress = NetDns.resolve(dnsHost);
+            long dnsMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - dnsStart);
+            result.append("  resolved ").append(dnsHost).append(" to ").append(dnsAddress)
+                  .append(" in ").append(dnsMillis).append("ms\n");
+        } catch (Throwable t) {
+            result.append("  resolving ").append(dnsHost).append(" failed:\n");
+            var dnsBaos = new ByteArrayOutputStream();
+            t.printStackTrace(new PrintStream(dnsBaos, true, StandardCharsets.UTF_8));
+            result.append(dnsBaos.toString(StandardCharsets.UTF_8));
+            result.append("\n");
+        }
         result.append("QuiclimeSession state: ");
         var session = E4allClient.session;
         if (session != null) {
@@ -64,9 +86,6 @@ public class Doctor {
             result.append("\n");
             result.append("assigned domain: ");
             result.append(session.assignedDomain != null ? session.assignedDomain : "(none)");
-            result.append("\n");
-            result.append("reconnect count: ");
-            result.append(session.getReconnectCount());
             result.append("\n");
         } else {
             result.append("no session.\n");

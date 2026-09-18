@@ -61,8 +61,8 @@ I only recommend using Krypton if you run an actual server, though I can't say m
 
 | Loader | Supported Minecraft Versions |
 | :--- | :--- |
-| **Fabric** | 1.18.x - 26.3-snapshot-9 |
-| **NeoForge** | 1.18.x - 26.3-snapshot-9 |
+| **Fabric** | 1.18.x - 26.3 |
+| **NeoForge** | 1.18.x - 26.3 |
 | **Forge** | 1.18.x - 1.20.4 |
 | **Android** | Android Java wrappers supported! (Windows, Linux and MacOS ofc too)|
 
@@ -106,4 +106,4 @@ e4all is licensed under the MIT license. See `LICENSE` for more info.
 * **GitHub Repository:** [https://github.com/Synquox/e4all](https://github.com/Synquox/e4all) (Obviously)
 * **Modrinth Page:** [https://modrinth.com/mod/e4all](https://modrinth.com/mod/e4all)
 I don't earn money from this on Modrinth as I can't fulfill the legal requirements to earn money in Germany, so this project is just for fun.
-The NCR feature of this mod was inspired by the No Chat Reports mod.s
+The NCR feature of this mod was inspired by the No Chat Reports mod.

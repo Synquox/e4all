@@ -19,6 +19,9 @@ public class DialtoneChannel extends AbstractChannel {
     private static final ChannelMetadata METADATA = new ChannelMetadata(false);
     private static final int COALESCE_THRESHOLD = 2048;
     private static final int MAX_COALESCE_BYTES = 32 * 1024;
+    // bigger reads = fewer round trips, guests used to fall through unloaded chunks
+    private static final int READ_CHUNK_BYTES = 256 * 1024;
+    private static final long STATS_WINDOW_NANOS = 10_000_000_000L;
     private final ChannelConfig config = new DefaultChannelConfig(this);
     Endpoint endpoint;
     Connection connection;
@@ -27,6 +30,10 @@ public class DialtoneChannel extends AbstractChannel {
     AtomicBoolean readInFlight = new AtomicBoolean(false);
     AtomicBoolean writeInFlight = new AtomicBoolean(false);
     AtomicBoolean writePending = new AtomicBoolean(false);
+    private long bytesRead;
+    private long firstReadNanos;
+    private long firstMiBNanos;
+    private boolean statsLogged;
 
 
     public DialtoneChannel() {
@@ -104,7 +111,7 @@ public class DialtoneChannel extends AbstractChannel {
         if (!readInFlight.compareAndSet(false, true)) {
             return;
         }
-        stream.readIrohStreamByteArray(65536).thenAccept(arr -> {
+        stream.readIrohStreamByteArray(READ_CHUNK_BYTES).thenAccept(arr -> {
             readInFlight.set(false);
             // All pipeline events must be fired on the event loop thread.
             // The iroh CompletableFuture may complete on a native thread.
@@ -116,6 +123,7 @@ public class DialtoneChannel extends AbstractChannel {
                     }
                     return;
                 }
+                e4all$trackRead(arr.length);
                 pipeline().fireChannelRead(Unpooled.wrappedBuffer(arr));
                 pipeline().fireChannelReadComplete();
                 // Schedule next read on event loop to avoid stack overflow from
@@ -133,6 +141,22 @@ public class DialtoneChannel extends AbstractChannel {
             });
             return null;
         });
+    }
+
+    private void e4all$trackRead(int bytes) {
+        long now = System.nanoTime();
+        if (firstReadNanos == 0L) firstReadNanos = now;
+        bytesRead += bytes;
+        if (firstMiBNanos == 0L && bytesRead >= 1024L * 1024L) {
+            firstMiBNanos = now;
+            E4allClient.LOGGER.info("e4all: relayed the first MiB in {} ms (join chunk burst timing)",
+                    (now - firstReadNanos) / 1_000_000L);
+        }
+        if (!statsLogged && now - firstReadNanos > STATS_WINDOW_NANOS) {
+            statsLogged = true;
+            E4allClient.LOGGER.info("e4all: relay receive rate: {} KiB in {} ms",
+                    bytesRead / 1024L, (now - firstReadNanos) / 1_000_000L);
+        }
     }
 
     @Override

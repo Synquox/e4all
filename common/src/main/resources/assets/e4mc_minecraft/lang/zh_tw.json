@@ -15,7 +15,6 @@
     "text.e4all_minecraft.onlineMode": "Online Mode: ",
     "text.e4all_minecraft.onlineModeTrue": "True",
     "text.e4all_minecraft.onlineModeFalse": "False (Offline)",
-    "text.e4all_minecraft.reconnecting": "e4all: 中繼連線遺失，正在嘗試重新連線...",
     "text.e4all_minecraft.hiddenDomain": "已隱藏，點擊複製",
     "text.e4all_minecraft.restartingRelay": "e4all: 正在重启中继连接...",
     "text.e4all_minecraft.error.noActiveSession": "e4all: 没有可重启的活动会话。",

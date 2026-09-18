@@ -114,10 +114,11 @@ public class E4allClient {
                                 if (E4allClient.session != null) {
                                     var rawHandler = E4allClient.session.handler;
                                     var group = E4allClient.session.group;
+                                    var owner = E4allClient.session.ownerServer();
                                     if (E4allClient.session.state != QuiclimeSession.State.STOPPED) {
                                         E4allClient.session.stopSync();
                                     }
-                                    E4allClient.session = new QuiclimeSession(rawHandler, group);
+                                    E4allClient.session = new QuiclimeSession(rawHandler, group, owner);
                                     E4allClient.session.startAsync();
                                     Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4all_minecraft.restartingRelay"));
                                 } else {

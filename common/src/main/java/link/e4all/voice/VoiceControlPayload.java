@@ -136,6 +136,8 @@ public final class VoiceControlPayload {
             if (typeCls == null) return;
 
             Class<?> encIf = findClass(cl, "net.minecraft.network.codec.StreamMemberEncoder", "net.minecraft.class_9142");
+            // 1.21.1 uses ValueFirstEncoder here, older versions StreamMemberEncoder
+            Class<?> vfeIf = findClass(cl, "net.minecraft.network.codec.ValueFirstEncoder", "net.minecraft.class_9143");
             Class<?> decIf = findClass(cl, "net.minecraft.network.codec.StreamDecoder", "net.minecraft.class_9141");
             Class<?> codecIf = findClass(cl, "net.minecraft.network.codec.StreamCodec", "net.minecraft.class_9139");
             Class<?> registryCls = findClass(cl, "net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry");
@@ -182,7 +184,10 @@ public final class VoiceControlPayload {
             }
             registeredType = type;
 
-            Object encoder = Proxy.newProxyInstance(cl, new Class<?>[]{encIf}, (p, m, a) -> {
+            Class<?>[] encoderIfs = (vfeIf != null && vfeIf != encIf)
+                    ? new Class<?>[]{encIf, vfeIf}
+                    : new Class<?>[]{encIf};
+            Object encoder = Proxy.newProxyInstance(cl, encoderIfs, (p, m, a) -> {
                 if (m.getDeclaringClass() == Object.class) return null;
                 // 26.x flipped the StreamMemberEncoder args (value, buf), older are (buf, value)
                 if (a == null || a.length != 2) return null;
@@ -210,11 +215,25 @@ public final class VoiceControlPayload {
             for (Method m : payloadIf.getMethods()) {
                 if (Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2) {
                     Class<?>[] p = m.getParameterTypes();
-                    if ((p[0].isAssignableFrom(encIf) || encIf.isAssignableFrom(p[0]))
-                            && (p[1].isAssignableFrom(decIf) || decIf.isAssignableFrom(p[1]))) {
+                    boolean firstOk = (p[0].isAssignableFrom(encIf) || encIf.isAssignableFrom(p[0]))
+                            || (vfeIf != null && (p[0].isAssignableFrom(vfeIf) || vfeIf.isAssignableFrom(p[0])));
+                    boolean secondOk = p[1].isAssignableFrom(decIf) || decIf.isAssignableFrom(p[1]);
+                    if (firstOk && secondOk) {
                         codecMethod = m;
                         break;
                     }
+                }
+            }
+            if (codecMethod == null) {
+                // the codec factory is named differently per mapping, try both shapes
+                for (String name : new String[]{"codec", "codecOf", "method_56484"}) {
+                    if (codecMethod == null && vfeIf != null) {
+                        try { codecMethod = payloadIf.getMethod(name, vfeIf, decIf); } catch (NoSuchMethodException ignored) {}
+                    }
+                    if (codecMethod == null) {
+                        try { codecMethod = payloadIf.getMethod(name, encIf, decIf); } catch (NoSuchMethodException ignored) {}
+                    }
+                    if (codecMethod != null) break;
                 }
             }
             if (codecMethod == null) {
@@ -478,8 +497,16 @@ public final class VoiceControlPayload {
         if (unwrap != null) {
             id = unwrap;
         }
-        return "e4all".equals(ResourceLocReflector.getNamespace(id))
-                && "voice".equals(ResourceLocReflector.getPath(id));
+        if ("e4all".equals(ResourceLocReflector.getNamespace(id))
+                && "voice".equals(ResourceLocReflector.getPath(id))) {
+            return true;
+        }
+        // getNamespace/getPath miss on srg runtimes (forge), so also compare the raw form
+        try {
+            Object own = channel();
+            if (own != null && own.equals(id)) return true;
+        } catch (Throwable ignored) {}
+        return "e4all:voice".equals(String.valueOf(id));
     }
 
     public static Object unwrapTypeId(Object obj) {

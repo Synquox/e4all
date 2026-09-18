@@ -28,6 +28,12 @@ public class Config extends ReflectiveConfig {
     public final TrackedValue<String> dialtoneRelayMap = this.value("https://natives.e4mc.link/relaymap.json");
     @Comment("Whether to hide direct IP addresses from the relay")
     public final TrackedValue<Boolean> dialtoneSanitizeTicket = this.value(true);
+    @Comment("How many times to try to reconnect to the relay before giving up when the connection drops")
+    public final TrackedValue<Integer> reconnectMaxAttempts = this.value(5);
+    @Comment("Initial reconnect delay in seconds; doubles with each subsequent attempt")
+    public final TrackedValue<Integer> reconnectBaseDelaySeconds = this.value(2);
+    @Comment("Keepalive probe interval in seconds to keep the relay session alive")
+    public final TrackedValue<Integer> keepaliveIntervalSeconds = this.value(15);
 
     @Comment("Whether to enable offline mode (disables Microsoft authentication for ALL LAN connections, including both tunneled and direct). Toggle via the 'Online Mode' button on the Open to LAN screen.")
     public final TrackedValue<Boolean> offlineMode = this.value(false);
@@ -39,13 +45,6 @@ public class Config extends ReflectiveConfig {
 
     @Comment("Whether to hide the domain in the chat message (click to copy still works)")
     public final TrackedValue<Boolean> hideDomainInChat = this.value(false);
-
-    @Comment("Maximum number of automatic reconnect attempts before giving up")
-    public final TrackedValue<Integer> reconnectMaxAttempts = this.value(5);
-    @Comment("Base delay in seconds before the first reconnect attempt (doubles each attempt)")
-    public final TrackedValue<Integer> reconnectBaseDelaySeconds = this.value(2);
-    @Comment("Interval in seconds between keepalive probes to the relay")
-    public final TrackedValue<Integer> keepaliveIntervalSeconds = this.value(15);
 
     @Comment("Master switch for SVC P2P voice support. When disabled, voice will not be negotiated.")
     public final TrackedValue<Boolean> voiceP2PEnabled = this.value(true);
