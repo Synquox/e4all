@@ -51,8 +51,8 @@ It is a fork of **e4mc** packed with fixes and quality-of-life additions: **offl
 | **Simple Voice Chat (SVC)** | ❌ | ✅ | Voice chat works. |
 | **Krypton Compatibility** | ❌ | ✅ | Krypton works if used with e4all, this was just a incompatibility before and it isn't anymore. |
 | **Android** | ❌ | ✅ | E4all works on Minecraft Java Launchers for Android. |
-| **Xaero's Minimap & World Map** | ❌ | ✅ | Syncs a world ID so waypoints and map progress don't reset when the domain changes. |
 | **No-Chat-Reports (NCR)** | ❌ | ✅ | Strips chat signatures and disables secure profile enforcement when Offline Mode is on. The e4all NCR feature was inspired by the NCR mod. |
+
 Do note that I only added Krypton compatibility because people were accidentally having it installed alongside e4all and it was causing problems. Having Krypton installed alongside e4all is pretty much useless.
 I only recommend using Krypton if you run an actual server, though I can't say much as I personally haven't really used Krypton before.
 ---
@@ -105,5 +105,7 @@ e4all is licensed under the MIT license. See `LICENSE` for more info.
 * **Discord Community & Support:** [https://discord.gg/mUYW9Rw2ae](https://discord.gg/mUYW9Rw2ae)
 * **GitHub Repository:** [https://github.com/Synquox/e4all](https://github.com/Synquox/e4all) (Obviously)
 * **Modrinth Page:** [https://modrinth.com/mod/e4all](https://modrinth.com/mod/e4all)
+* The NCR feature of this mod was inspired by the No Chat Reports mod.
+
 I don't earn money from this on Modrinth as I can't fulfill the legal requirements to earn money in Germany, so this project is just for fun.
-The NCR feature of this mod was inspired by the No Chat Reports mod.
+

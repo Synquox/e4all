@@ -12,6 +12,10 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
     private static final boolean HAS_MULTIPLAYER_OPTIONS_SCREEN;
     private static final boolean HAS_SHARE_TO_LAN_SCREEN;
     private static final boolean HAS_WORLD_OPTIONS_SCREEN;
+    // 1.20.2+ custom payloads
+    private static final boolean HAS_MODERN_PAYLOADS;
+    // 1.21.2+ payload dispatch codec
+    private static final boolean HAS_MODERN_PAYLOAD_CODEC_TARGETS;
     static {
         boolean hasSignatures = false;
         try {
@@ -43,6 +47,23 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         HAS_WORLD_OPTIONS_SCREEN =
                 cl.getResource("net/minecraft/client/gui/screens/WorldOptionsScreen.class") != null
              || cl.getResource("net/minecraft/client/gui/screens/options/WorldOptionsScreen.class") != null;
+
+        boolean hasModernPayloads = false;
+        try {
+            hasModernPayloads = cl.getResource("net/minecraft/network/protocol/common/ServerboundCustomPayloadPacket.class") != null
+                             || cl.getResource("net/minecraft/class_8709.class") != null;
+        } catch (Throwable ignored) {
+        }
+        HAS_MODERN_PAYLOADS = hasModernPayloads;
+
+        boolean hasPayloadCodecTargets = false;
+        try {
+            hasPayloadCodecTargets =
+                    cl.getResource("net/minecraft/network/protocol/common/custom/CustomPacketPayload$1.class") != null
+                 && cl.getResource("net/minecraft/network/codec/IdDispatchCodec.class") != null;
+        } catch (Throwable ignored) {
+        }
+        HAS_MODERN_PAYLOAD_CODEC_TARGETS = hasPayloadCodecTargets;
     }
 
     @Override
@@ -74,6 +95,19 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         }
         if (mixinClassName.endsWith("WorldOptionsScreenMixin")) {
             return HAS_WORLD_OPTIONS_SCREEN;
+        }
+
+        if (mixinClassName.endsWith("CustomPayloadDispatchCodecMixin")
+                || mixinClassName.endsWith("IdDispatchCodecMixin")) {
+            return HAS_MODERN_PAYLOAD_CODEC_TARGETS;
+        }
+
+        if (mixinClassName.endsWith("ClientboundCustomPayloadPacketMixin")
+                || mixinClassName.endsWith("DiscardedPayloadMixin")
+                || mixinClassName.endsWith("ServerboundCustomPayloadPacketMixin")
+                || mixinClassName.endsWith("ServerCommonPacketListenerImplMixin")
+                || mixinClassName.endsWith("ClientCommonPacketListenerImplMixin")) {
+            return HAS_MODERN_PAYLOADS;
         }
 
         return true;

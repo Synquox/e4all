@@ -182,6 +182,12 @@ public final class HostVoiceNegotiator {
 
         VoiceControl.sendToPlayer(player, VoiceControl.encodeOffer(
                 transport, ticket, List.of(), failure));
+
+        if (transport == VoiceControl.TRANSPORT_DIALTONE && ticket.length() <= 95) {
+            E4allClient.LOGGER.info(
+                    "e4all voice: OFFER carries a relay/rendezvous ticket (length={}); guest dial may exceed the 20s negotiation timer, late relay recovery will cover it",
+                    ticket.length());
+        }
     }
 
     public void onResult(ServerPlayer player, boolean ok, byte transport,
@@ -193,6 +199,15 @@ public final class HostVoiceNegotiator {
 
         NegotiationState state = negotiations.remove(player.getStringUUID());
         if (state == null) {
+            if (ok && transport == VoiceControl.TRANSPORT_DIALTONE) {
+                // accept late result as recovery
+                E4allClient.LOGGER.info(
+                        "e4all voice: late RESULT(ok) from {} - accepting as relay recovery (voice stream handshake already complete)",
+                        player.getScoreboardName());
+                VoiceControl.sendToPlayer(player, VoiceControl.encodeReady(
+                        true, transport, rttMs, null));
+                return;
+            }
             E4allClient.LOGGER.warn("e4all voice: received RESULT from {} without prior OFFER",
                 player.getScoreboardName());
         }

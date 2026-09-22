@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.2
+
+### Fixes
+* bug fixes
+* Also removed xaeros mods compatibility added in e4all that e4mc didn't have as it produced many bugs. I'll readd it once I'm sure there'll be no bugs.
+
 ## 2.1.1
 
 - Added 26.3 support.

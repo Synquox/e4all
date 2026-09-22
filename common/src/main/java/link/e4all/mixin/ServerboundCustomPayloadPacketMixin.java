@@ -6,6 +6,7 @@ import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -31,7 +32,14 @@ public class ServerboundCustomPayloadPacketMixin {
             byte[] data = VoiceControlPayload.readRemaining(new FriendlyByteBuf(buf.slice()));
             VoiceControlPayload.PENDING.set(data);
             VoiceControlPayload.enqueuePendingServer(data);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            if (!e4all$captureWarned) {
+                e4all$captureWarned = true;
+                link.e4all.E4allClient.LOGGER.warn("e4all voice: serverbound voice payload capture failed (further failures stay silent)", t);
+            }
         }
     }
+
+    @Unique
+    private static volatile boolean e4all$captureWarned = false;
 }

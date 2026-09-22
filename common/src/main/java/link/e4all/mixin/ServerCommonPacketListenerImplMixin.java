@@ -5,6 +5,7 @@ import link.e4all.voice.VoiceControlPayload;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.server.network.ServerCommonPacketListenerImpl;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -22,8 +23,15 @@ public class ServerCommonPacketListenerImplMixin {
                 VoiceControl.handleServerPayload(this, data);
                 ci.cancel();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            if (!e4all$dispatchWarned) {
+                e4all$dispatchWarned = true;
+                link.e4all.E4allClient.LOGGER.warn("e4all voice: serverbound control payload dispatch failed (further failures stay silent)", t);
+            }
         }
     }
+
+    @Unique
+    private static volatile boolean e4all$dispatchWarned = false;
 }
 

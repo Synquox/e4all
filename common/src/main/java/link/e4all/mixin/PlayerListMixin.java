@@ -12,6 +12,7 @@ import net.minecraft.server.players.UserBanList;
 import net.minecraft.server.players.UserWhiteList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -61,8 +62,33 @@ public abstract class PlayerListMixin {
         if (server == null || server.isDedicatedServer()) return;
 
         try {
-            QuiclimeSession session = E4allClient.session;
-            if (session != null && !session.ownsServer(server)) {
+            if (ServerStartupTracker.isStopping(server)) {
+                E4allClient.LOGGER.info("e4all: rejecting guest login, world is stopping ({})",
+                        ServerStartupTracker.describe(server));
+                cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
+                return;
+            }
+
+            // hold guest if world is still finishing startup
+            long readyTimeoutMs = 0L;
+            try {
+                readyTimeoutMs = Config.INSTANCE.loginReadyTimeoutMs.value();
+            } catch (Throwable ignored) {}
+            if (readyTimeoutMs > 0
+                    && (ServerStartupTracker.isStarting(server) || ServerStartupTracker.isMidFirstTick(server))) {
+                E4allClient.LOGGER.info("e4all: holding guest login until the world is ticking ({}, up to {} ms)",
+                        ServerStartupTracker.describe(server), readyTimeoutMs);
+                if (!ServerStartupTracker.awaitReady(server, readyTimeoutMs, () -> e4all$ownsActiveSession(server))) {
+                    E4allClient.LOGGER.info("e4all: rejecting guest login, world did not finish starting in time ({})",
+                            ServerStartupTracker.describe(server));
+                    cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
+                    return;
+                }
+                E4allClient.LOGGER.info("e4all: world is ticking, letting the held guest login through ({})",
+                        ServerStartupTracker.describe(server));
+            }
+
+            if (!e4all$ownsActiveSession(server)) {
                 E4allClient.LOGGER.info("e4all: rejecting guest login, the relay session belongs to another world ({})",
                         ServerStartupTracker.describe(server));
                 cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
@@ -84,6 +110,13 @@ public abstract class PlayerListMixin {
         } catch (Throwable t) {
             E4allClient.LOGGER.warn("e4all: login gate check failed", t);
         }
+    }
+
+    // a login is only ours to admit while no other world holds the tunnel
+    @Unique
+    private static boolean e4all$ownsActiveSession(MinecraftServer server) {
+        QuiclimeSession session = E4allClient.session;
+        return session == null || session.ownsServer(server);
     }
 
     @Inject(method = "canPlayerLogin", at = @At("HEAD"), cancellable = true, require = 0)

@@ -73,6 +73,11 @@ public final class PacketHelper {
         return null;
     }
 
+    // version detection across mojmap/intermediary/srg
+    public static boolean hasClass(String[] candidateNames) {
+        return findClass(candidateNames) != null;
+    }
+
     // legacy payloads are matched by class name, mojmap on forge and intermediary on fabric
     public static boolean isClientboundCustomPayloadPacket(Object packet) {
         return matchesPacketClass(packet, CLIENTBOUND_PACKET_CLASS_NAMES);
@@ -360,12 +365,15 @@ public final class PacketHelper {
                 return;
             }
             if (!testEncode(pkt)) {
-                if (!VoiceControlPayload.isOwnChannel(channel)) {
+                Throwable why = lastTestFailure();
+                if (VoiceControlPayload.isOwnChannel(channel)) {
+                    // don't send malformed payloads that failed encoding
+                    LOGGER.warn("e4all: payload {} failed the codec test, dropping it instead of "
+                            + "risking a desynced stream", channel, why);
+                } else {
                     LOGGER.debug("e4all: payload {} cannot be encoded by server packet codec; skipping", channel);
-                    return;
                 }
-                // own channel has to go out either way, log why the codec rejected it
-                LOGGER.warn("e4all: payload {} failed the codec test, sending it anyway", channel, lastTestFailure());
+                return;
             }
             Packet<?> fresh = makePacket(true, channel, data);
             if (fresh != null) pkt = fresh;
@@ -387,12 +395,14 @@ public final class PacketHelper {
                 return;
             }
             if (!testEncode(pkt)) {
-                if (!VoiceControlPayload.isOwnChannel(channel)) {
+                Throwable why = lastTestFailure();
+                if (VoiceControlPayload.isOwnChannel(channel)) {
+                    LOGGER.warn("e4all: payload {} failed the codec test, dropping it instead of "
+                            + "risking a desynced stream", channel, why);
+                } else {
                     LOGGER.debug("e4all: payload {} cannot be encoded by client packet codec; skipping", channel);
-                    return;
                 }
-                // own channel has to go out either way, log why the codec rejected it
-                LOGGER.warn("e4all: payload {} failed the codec test, sending it anyway", channel, lastTestFailure());
+                return;
             }
             Packet<?> fresh = makePacket(false, channel, data);
             if (fresh != null) pkt = fresh;
@@ -405,6 +415,10 @@ public final class PacketHelper {
     // send(Packet) has a different srg name per version, so match it by signature
     public static boolean sendPacket(Object connection, Packet<?> pkt) {
         if (connection == null || pkt == null) return false;
+        // attach legacy sniffer if needed before sending voice payloads
+        try {
+            link.e4all.voice.LegacyPayloadBridge.installFromConnectionLike(connection);
+        } catch (Throwable ignored) {}
         Throwable lastCause = null;
         for (Method m : connection.getClass().getMethods()) {
             if (m.getReturnType() != void.class) continue;

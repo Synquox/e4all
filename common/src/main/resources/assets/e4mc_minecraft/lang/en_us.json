@@ -96,5 +96,9 @@
     "text.e4all_minecraft.config.option.reconnectBaseDelaySeconds.tooltip": "Initial delay in seconds before the first reconnect attempt. Doubles with each subsequent attempt (default: 2).",
     "text.e4all_minecraft.config.option.keepaliveIntervalSeconds": "Keepalive Interval",
     "text.e4all_minecraft.config.option.keepaliveIntervalSeconds.tooltip": "How often (in seconds) a keepalive probe is sent to keep the relay session alive (default: 15).",
+    "text.e4all_minecraft.config.option.loginReadyTimeoutMs": "Login Ready Timeout (ms)",
+    "text.e4all_minecraft.config.option.loginReadyTimeoutMs.tooltip": "How long a guest login waits for a starting world to finish its first tick before being rejected. Helpful for heavy modpacks that take several seconds to load. Set to 0 to reject immediately (default: 15000).",
+    "text.e4all_minecraft.config.option.preventPauseWhileHosting": "Keep World Ticking While Hosting",
+    "text.e4all_minecraft.config.option.preventPauseWhileHosting.tooltip": "Vanilla pauses singleplayer worlds on ESC or when tabbed out, which freezes connected guests. Keeps the world ticking while hosting.",
     "text.e4all_minecraft.relayLost": "§6e4all§r Relay connection lost. Re-open the world to LAN to host again, or run /e4all restart (the address will change)."
 }

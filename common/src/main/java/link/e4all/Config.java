@@ -20,6 +20,8 @@ public class Config extends ReflectiveConfig {
 
     @Comment("Whether to enable sharing LAN worlds with e4all")
     public final TrackedValue<Boolean> hostEnabled = this.value(true);
+    @Comment("Keep the world ticking while e4all is hosting it. Vanilla pauses a singleplayer world on ESC and on window focus loss, and a paused world freezes every connected guest until they are dropped. Dedicated servers never pause.")
+    public final TrackedValue<Boolean> preventPauseWhileHosting = this.value(true);
     @Comment("Whether to enable Dialtone peer-to-peer connections as the host")
     public final TrackedValue<Boolean> dialtoneHostEnabled = this.value(true);
     @Comment("Whether to enable Dialtone peer-to-peer connections as the player")
@@ -34,6 +36,8 @@ public class Config extends ReflectiveConfig {
     public final TrackedValue<Integer> reconnectBaseDelaySeconds = this.value(2);
     @Comment("Keepalive probe interval in seconds to keep the relay session alive")
     public final TrackedValue<Integer> keepaliveIntervalSeconds = this.value(15);
+    @Comment("How long (in ms) a guest login may wait for a starting world to finish its first tick before being rejected. Heavy modpacks can stall a full server tick for several seconds; waiting avoids kicking everyone who joins in that window. Set to 0 to reject immediately instead of waiting.")
+    public final TrackedValue<Integer> loginReadyTimeoutMs = this.value(15000);
 
     @Comment("Whether to enable offline mode (disables Microsoft authentication for ALL LAN connections, including both tunneled and direct). Toggle via the 'Online Mode' button on the Open to LAN screen.")
     public final TrackedValue<Boolean> offlineMode = this.value(false);

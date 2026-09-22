@@ -72,6 +72,10 @@ public final class DialtoneClientVoicechatSocket implements ClientVoicechatSocke
     @Override
     public void send(byte[] data, SocketAddress address) {
         if (closed) return;
+        if (ClientVoiceNegotiator.INSTANCE.isNegotiationFailed()) {
+            // drop packets if negotiation failed completely
+            return;
+        }
         DialtoneChannel ch = ClientVoiceNegotiator.INSTANCE.voiceChannel();
         if (ch == null || !ch.isActive()) {
             if (pendingOutgoing.size() < 32) {

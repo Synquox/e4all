@@ -94,6 +94,8 @@ public class E4allConfigScreen extends Screen {
                     v -> Config.INSTANCE.hideDomainInChat.setValue(v, true));
             addToggle("offlineMode", rightCol, 132, () -> Config.INSTANCE.offlineMode.value(),
                     v -> Config.INSTANCE.offlineMode.setValue(v, true));
+            addToggle("preventPauseWhileHosting", leftCol, 156, () -> Config.INSTANCE.preventPauseWhileHosting.value(),
+                    v -> Config.INSTANCE.preventPauseWhileHosting.setValue(v, true));
         } else {
             addToggle("useBroker", leftCol, 86, () -> Config.INSTANCE.useBroker.value(),
                     v -> Config.INSTANCE.useBroker.setValue(v, true));
@@ -104,6 +106,8 @@ public class E4allConfigScreen extends Screen {
             addTextField("relayHost", rightCol, 128, COL_WIDTH, Config.INSTANCE.relayHost.value(), s -> true);
             addTextField("dialtoneRelayMap", leftCol, 128 + FIELD_BLOCK_HEIGHT, COL_WIDTH * 2 + 10,
                     Config.INSTANCE.dialtoneRelayMap.value(), s -> true);
+            addTextField("loginReadyTimeoutMs", rightCol, 128 + 2 * FIELD_BLOCK_HEIGHT, COL_WIDTH,
+                    String.valueOf(Config.INSTANCE.loginReadyTimeoutMs.value()), s -> s.matches("\\d*"));
         }
 
         int footerY = this.height - 25;
@@ -226,6 +230,18 @@ public class E4allConfigScreen extends Screen {
                 Config.INSTANCE.relayPort.setValue(value, true);
             } catch (NumberFormatException e) {
                 E4allClient.LOGGER.warn("e4all: invalid relay port '{}', keeping current value", port);
+            }
+        }
+        String readyTimeout = pendingEdits.remove("loginReadyTimeoutMs");
+        if (readyTimeout != null) {
+            try {
+                int value = Integer.parseInt(readyTimeout.trim());
+                if (value < 0 || value > 120_000) {
+                    throw new NumberFormatException();
+                }
+                Config.INSTANCE.loginReadyTimeoutMs.setValue(value, true);
+            } catch (NumberFormatException e) {
+                E4allClient.LOGGER.warn("e4all: invalid login ready timeout '{}', keeping current value", readyTimeout);
             }
         }
     }
@@ -390,7 +406,7 @@ public class E4allConfigScreen extends Screen {
         graphics.fill(panelX, panelY, panelX + 1, panelY + panelHeight, 0xFF555555);
         graphics.fill(panelX + panelWidth - 1, panelY, panelX + panelWidth, panelY + panelHeight, 0xFF555555);
         graphics.drawString(this.font, Mirror.translatable(optionKey(key)), panelX + 6, panelY + 4, 0xFFFFFFA0);
-        drawWrapped(graphics, Mirror.translatable(key + ".tooltip"), panelX + 6, panelY + 15,
+        drawWrapped(graphics, Mirror.translatable(optionKey(key) + ".tooltip"), panelX + 6, panelY + 15,
                 panelWidth - 12, 3, 0xFFC8C8C8);
     }
 

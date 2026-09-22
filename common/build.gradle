@@ -2,6 +2,10 @@ architectury {
     common(rootProject.enabled_platforms.split(","))
 }
 
+repositories {
+    mavenCentral()
+}
+
 dependencies {
     // We depend on fabric loader here to use the fabric @Environment annotations and get the mixin dependencies
     // Do NOT use other classes from fabric loader
@@ -14,6 +18,19 @@ dependencies {
     implementation("io.netty:netty-all:4.2.9.Final")
     implementation("link.e4mc:iroh-java:${rootProject.iroh_java_version}")
     compileOnly "de.maxhenkel.voicechat:voicechat-api:2.5.31"
+
+    // plain-JVM unit tests for the voice negotiation logic (no Minecraft needed)
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
 }
 
 configurations {

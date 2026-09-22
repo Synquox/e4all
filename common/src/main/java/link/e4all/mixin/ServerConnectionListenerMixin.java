@@ -6,7 +6,6 @@ import link.e4all.Config;
 import link.e4all.E4allClient;
 import link.e4all.QuiclimeSession;
 import link.e4all.ServerStartupTracker;
-import link.e4all.XaeroWorldIdentity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerConnectionListener;
 import org.spongepowered.asm.mixin.Mixin;
@@ -72,10 +71,11 @@ public abstract class ServerConnectionListenerMixin {
         synchronized (E4allClient.SESSION_LOCK) {
             QuiclimeSession existing = E4allClient.session;
 
-            // session of this world is still valid, keep it so re-opening LAN keeps the address
+            // keep active or reconnecting session on LAN re-open
             if (existing != null && existing.ownsServer(server)
                     && (existing.state == QuiclimeSession.State.STARTING
-                        || existing.state == QuiclimeSession.State.STARTED)) {
+                        || existing.state == QuiclimeSession.State.STARTED
+                        || existing.state == QuiclimeSession.State.RECONNECTING)) {
                 E4allClient.LOGGER.info("e4all: relay session already active for this world (state: {}), keeping it",
                         existing.state);
                 return;
@@ -88,11 +88,16 @@ public abstract class ServerConnectionListenerMixin {
                 existing.stop(); // asynchronous, never blocks the server thread
             }
 
-            XaeroWorldIdentity.initializeForRelay(server);
             QuiclimeSession session = new QuiclimeSession(childHandler, group, server);
             E4allClient.session = session;
             E4allClient.LOGGER.info("e4all: starting a relay session for the current world ({})",
                     ServerStartupTracker.describe(server));
+            long readyTimeout = 0L;
+            try {
+                readyTimeout = Config.INSTANCE.loginReadyTimeoutMs.value();
+            } catch (Throwable ignored) {}
+            E4allClient.LOGGER.info("e4all: guest logins are admitted once this world is ticking, "
+                    + "owns the tunnel and has a player in it (login ready timeout: {} ms)", readyTimeout);
             session.startAsync();
         }
     }

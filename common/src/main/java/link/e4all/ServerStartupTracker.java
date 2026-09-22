@@ -97,6 +97,57 @@ public final class ServerStartupTracker {
         return state == null ? 0L : state.startNanos;
     }
 
+    // wait for world to finish first tick before admitting guest
+    public static boolean awaitReady(MinecraftServer server, long timeoutMs,
+                                     java.util.function.BooleanSupplier ownsActiveSession) {
+        if (server == null) return false;
+        return waitForReady(
+                () -> !isStarting(server) && !isMidFirstTick(server),
+                () -> isStopping(server),
+                () -> ownsActiveSession == null || checkOwnership(ownsActiveSession),
+                timeoutMs,
+                DEFAULT_POLL_INTERVAL_MS);
+    }
+
+    public static final long DEFAULT_POLL_INTERVAL_MS = 50L;
+
+    // loop helper for tests
+    static boolean waitForReady(java.util.function.BooleanSupplier ticking,
+                                java.util.function.BooleanSupplier stopping,
+                                java.util.function.BooleanSupplier owned,
+                                long timeoutMs, long pollIntervalMs) {
+        long deadline = System.nanoTime() + Math.max(0L, timeoutMs) * 1_000_000L;
+        while (true) {
+            if (safeGet(stopping)) return false;
+            if (safeGet(ticking) && safeGet(owned)) return true;
+            if (System.nanoTime() >= deadline) return false;
+            try {
+                Thread.sleep(Math.max(1L, pollIntervalMs));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+    }
+
+    private static boolean safeGet(java.util.function.BooleanSupplier check) {
+        if (check == null) return false;
+        try {
+            return check.getAsBoolean();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static boolean checkOwnership(java.util.function.BooleanSupplier check) {
+        if (check == null) return true;
+        try {
+            return check.getAsBoolean();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static String describe(MinecraftServer server) {
         if (server == null) return "server=null";
         ServerState state = stateOf(server, false);

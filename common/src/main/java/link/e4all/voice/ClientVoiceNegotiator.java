@@ -26,20 +26,36 @@ public final class ClientVoiceNegotiator {
     private static final long CONNECT_TIMEOUT_MS = 20_000;
     private static final int MAX_QUEUED_PACKETS = 256;
     private static final long HELLO_TIMEOUT_MS = 10_000;
-    private static final int MAX_HELLO_RETRIES = 1;
+    private static final int MAX_HELLO_RETRIES = 3;
+
+    // dedicated scheduler so watchdog isn't blocked by common pool
+    private static final java.util.concurrent.ScheduledExecutorService WATCHDOG =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "e4all-voice-hello-watchdog");
+                t.setDaemon(true);
+                return t;
+            });
 
     private volatile DialtoneChannel voiceChannel;
     private volatile boolean negotiating = false;
     private volatile boolean connectedMessageShown = false;
     private final AtomicReference<LinkedBlockingQueue<VoiceDataPacket>> receiveQueue = new AtomicReference<>();
     private final java.util.concurrent.atomic.AtomicLong helloGeneration = new java.util.concurrent.atomic.AtomicLong();
+    // invalidates in-flight dials on stop()/rejoin
+    private final java.util.concurrent.atomic.AtomicLong dialGeneration = new java.util.concurrent.atomic.AtomicLong();
+    private volatile boolean stopped = false;
+    private volatile long offerAcceptedAtMs = 0L;
     private volatile boolean offerSeen = false;
     private volatile int helloRetries = 0;
+    // true once HELLO retries exhausted without an OFFER
+    private volatile boolean negotiationFailed = false;
 
     private ClientVoiceNegotiator() {}
 
     public void sendHello() {
         boolean hasVoiceClient = hasSvc();
+        stopped = false;
+        negotiationFailed = false;
         offerSeen = false;
         helloRetries = 0;
         E4allClient.LOGGER.info("e4all voice: sending HELLO (hasVoiceClient={})", hasVoiceClient);
@@ -58,10 +74,12 @@ public final class ClientVoiceNegotiator {
 
     private void scheduleHelloWatchdog() {
         final long generation = helloGeneration.incrementAndGet();
-        CompletableFuture.delayedExecutor(HELLO_TIMEOUT_MS, TimeUnit.MILLISECONDS).execute(() -> {
+        // linear backoff: 10s for the initial attempt, then 20s / 30s / 40s per retry
+        long delayMs = HELLO_TIMEOUT_MS * (helloRetries + 1);
+        WATCHDOG.schedule(() -> {
             if (helloGeneration.get() != generation) return;
             onHelloTimeout();
-        });
+        }, delayMs, TimeUnit.MILLISECONDS);
     }
 
     private void onHelloTimeout() {
@@ -70,8 +88,13 @@ public final class ClientVoiceNegotiator {
         E4allClient.LOGGER.warn(
                 "e4all voice: no OFFER from the host {} ms after HELLO (offerSeen={}, retries={}) - the e4all:voice control channel is not getting through; "
                         + "check that both players run the same e4all build for this Minecraft version",
-                HELLO_TIMEOUT_MS, offerSeen, helloRetries);
+                HELLO_TIMEOUT_MS * (helloRetries + 1), offerSeen, helloRetries);
         if (helloRetries >= MAX_HELLO_RETRIES) {
+            negotiationFailed = true;
+            E4allClient.LOGGER.error(
+                    "e4all voice: voice negotiation failed permanently - {} HELLO attempts produced no OFFER; "
+                            + "outgoing voice packets will be dropped until the next reconnect instead of buffering forever",
+                    helloRetries + 1);
             showFailure(VoiceFailure.NEGOTIATION_TIMEOUT);
             return;
         }
@@ -84,6 +107,7 @@ public final class ClientVoiceNegotiator {
     public void onOffer(byte transport, String ticket, List<String> candidates,
                         VoiceFailure failure) {
         offerSeen = true;
+        negotiationFailed = false;
         helloGeneration.incrementAndGet();
         E4allClient.LOGGER.info("e4all voice: OFFER received (transport={}, ticket={}, candidates={}, failure={})",
                 transport, ticket.isEmpty() ? "<none>" : ticket.substring(0, Math.min(20, ticket.length())) + "...",
@@ -118,7 +142,9 @@ public final class ClientVoiceNegotiator {
                 return;
             }
             negotiating = true;
-            dialDialtone(ticket);
+            dialGeneration.incrementAndGet();
+            offerAcceptedAtMs = System.currentTimeMillis();
+            dialDialtone(ticket, dialGeneration.get());
         } else if (transport == VoiceControl.TRANSPORT_UDP) {
             E4allClient.LOGGER.info("e4all voice: UDP transport offered but not implemented yet");
             VoiceControl.sendToServer(VoiceControl.encodeResult(
@@ -132,7 +158,7 @@ public final class ClientVoiceNegotiator {
         }
     }
 
-    private void dialDialtone(String ticket) {
+    private void dialDialtone(String ticket, long gen) {
         final AtomicBoolean resultSent = new AtomicBoolean(false);
         CompletableFuture.runAsync(() -> {
             DialtoneChannel ch = null;
@@ -182,8 +208,45 @@ public final class ClientVoiceNegotiator {
                             true, VoiceControl.TRANSPORT_DIALTONE, rttMs,
                             null, List.of()));
                 } else {
-                    E4allClient.LOGGER.warn("e4all voice: dial finished after a failure was already reported; closing late channel");
-                    ch.close();
+                    // check if late dial can still be adopted as recovery
+                    DialtoneChannel current = voiceChannel;
+                    boolean newerChannelActive = current != null && current.isActive() && current != ch;
+                    DialRecoveryPolicy.Decision decision = DialRecoveryPolicy.evaluate(
+                            stopped, dialGeneration.get() == gen, isSessionAlive(), newerChannelActive,
+                            System.currentTimeMillis() - offerAcceptedAtMs);
+                    switch (decision) {
+                        case ADOPT -> {
+                            E4allClient.LOGGER.info(
+                                    "e4all voice: dial completed after the negotiation timer - adopting late channel as relay recovery ({}ms after OFFER)",
+                                    System.currentTimeMillis() - offerAcceptedAtMs);
+                            voiceChannel = ch;
+                            E4allClient.LOGGER.info("e4all voice: Dialtone voice connected via late relay dial (RTT {}ms)", rttMs);
+                            DialtoneClientVoicechatSocket lateSocket = DialtoneClientVoicechatSocket.getActiveInstance();
+                            if (lateSocket != null) {
+                                lateSocket.flushPending(ch);
+                            }
+                            VoiceControl.sendToServer(VoiceControl.encodeResult(
+                                    true, VoiceControl.TRANSPORT_DIALTONE, rttMs,
+                                    null, List.of()));
+                        }
+                        case CLOSE_SUPERSEDED -> {
+                            E4allClient.LOGGER.warn("e4all voice: dial finished after a failure was already reported; a newer voice channel is active - closing late channel");
+                            ch.close();
+                        }
+                        case CLOSE_SESSION_GONE -> {
+                            E4allClient.LOGGER.debug("e4all voice: late dial finished but the game session is gone; closing late channel");
+                            ch.close();
+                        }
+                        case CLOSE_WINDOW_EXPIRED -> {
+                            E4allClient.LOGGER.warn("e4all voice: late dial finished {}ms after the OFFER, beyond the {}ms recovery window; closing late channel",
+                                    System.currentTimeMillis() - offerAcceptedAtMs, DialRecoveryPolicy.RECOVERY_WINDOW_MS);
+                            ch.close();
+                        }
+                        default -> {
+                            E4allClient.LOGGER.debug("e4all voice: negotiation was stopped; closing orphaned late dial");
+                            ch.close();
+                        }
+                    }
                 }
             } catch (Throwable t) {
                 E4allClient.LOGGER.error("e4all voice: Dialtone voice dial failed", t);
@@ -200,18 +263,13 @@ public final class ClientVoiceNegotiator {
             }
         }).orTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
           .exceptionally(t -> {
-              // orTimeout() surfaces as CompletionException; unwrap it
               Throwable cause = (t instanceof CompletionException ce && ce.getCause() != null) ? ce.getCause() : t;
               if (cause instanceof TimeoutException) {
-                  E4allClient.LOGGER.warn("e4all voice: Dialtone dial timed out after {}ms", CONNECT_TIMEOUT_MS);
+                  E4allClient.LOGGER.warn("e4all voice: Dialtone dial timed out after {}ms - keeping the dial alive as a relay recovery attempt", CONNECT_TIMEOUT_MS);
                   if (resultSent.compareAndSet(false, true)) {
                       VoiceControl.sendToServer(VoiceControl.encodeResult(
                               false, VoiceControl.TRANSPORT_DIALTONE, 0,
                               VoiceFailure.TIMEOUT, List.of()));
-                  }
-                  DialtoneChannel late = voiceChannel;
-                  if (late != null) {
-                      try { late.close(); } catch (Throwable ignored) {}
                   }
               } else {
                   E4allClient.LOGGER.debug("e4all voice: dial future completed exceptionally", t);
@@ -261,6 +319,8 @@ public final class ClientVoiceNegotiator {
         connectedMessageShown = false;
         negotiating = false;
         offerSeen = false;
+        stopped = true;
+        dialGeneration.incrementAndGet();
         helloGeneration.incrementAndGet();
         DialtoneChannel ch = voiceChannel;
         voiceChannel = null;
@@ -279,6 +339,10 @@ public final class ClientVoiceNegotiator {
 
     public DialtoneChannel voiceChannel() {
         return voiceChannel;
+    }
+
+    public boolean isNegotiationFailed() {
+        return negotiationFailed;
     }
 
     public LinkedBlockingQueue<VoiceDataPacket> getOrCreateReceiveQueue() {
@@ -327,6 +391,13 @@ public final class ClientVoiceNegotiator {
                     ClientVoiceNegotiator.class.getClassLoader());
             return true;
         } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+    private static boolean isSessionAlive() {
+        try {
+            return Minecraft.getInstance().getConnection() != null;
+        } catch (Throwable t) {
             return false;
         }
     }

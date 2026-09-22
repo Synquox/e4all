@@ -27,6 +27,11 @@ public final class LegacyPayloadBridge {
     private static final String HANDLER_NAME = "e4all_legacy_payload";
     private static final String RAW_CACHE_HANDLER_NAME = "e4all_legacy_raw_frame_cache";
     private static final String VOICE_CHANNEL_NAME = "e4all:voice";
+    // 1.20.2+ payload packets
+    private static final String[] MODERN_PAYLOAD_PACKET = {
+            "net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket",
+            "net.minecraft.class_8709"
+    };
 
     private static final Map<Channel, byte[]> LAST_RAW_FRAMES =
             Collections.synchronizedMap(new java.util.WeakHashMap<>());
@@ -34,14 +39,35 @@ public final class LegacyPayloadBridge {
     private static volatile Boolean legacyRuntime;
     private static final Set<Connection> INSTALLED =
             Collections.synchronizedSet(Collections.newSetFromMap(new java.util.WeakHashMap<>()));
+    private static final Set<String> WARNED_REASONS = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private LegacyPayloadBridge() {}
+
+    private static void warnOnce(String reason) {
+        if (WARNED_REASONS.add(reason)) {
+            E4allClient.LOGGER.warn("e4all voice: legacy payload sniffer could not install - {}", reason);
+        }
+    }
+
+    private static boolean classPresent(String resource) {
+        try {
+            return LegacyPayloadBridge.class.getClassLoader().getResource(resource) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     private static boolean isLegacyRuntime() {
         Boolean cached = legacyRuntime;
         if (cached != null) return cached;
-        boolean legacy = VoiceControlPayload.getPayloadInterface() == null;
+        // check if runtime uses legacy (1.18-1.20.1) payload format
+        boolean modern = VoiceControlPayload.getPayloadInterface() != null
+                && PacketHelper.hasClass(MODERN_PAYLOAD_PACKET);
+        boolean legacy = !modern;
         legacyRuntime = legacy;
+        if (legacy) {
+            E4allClient.LOGGER.info("e4all voice: legacy runtime detected (1.18 - 1.20.1 payload format), pipeline sniffer required");
+        }
         return legacy;
     }
 
@@ -50,7 +76,9 @@ public final class LegacyPayloadBridge {
         try {
             if (INSTALLED.contains(connection)) return;
             Channel channel = channelOf(connection);
-            if (channel == null) return;
+            if (channel == null) {
+                return;
+            }
             ChannelPipeline pipeline = channel.pipeline();
             if (pipeline.get(HANDLER_NAME) != null) {
                 INSTALLED.add(connection);
@@ -79,7 +107,35 @@ public final class LegacyPayloadBridge {
             INSTALLED.add(connection);
             E4allClient.LOGGER.info("e4all voice: legacy payload sniffer installed (1.18 - 1.20.1 payload format)");
         } catch (Throwable t) {
-            E4allClient.LOGGER.debug("e4all voice: could not install the legacy payload sniffer", t);
+            warnOnce("unexpected error on connection " + connection.getClass().getName() + ": " + t);
+        }
+    }
+
+    // helper to extract connection from packet listeners
+    public static void installFromConnectionLike(Object holder) {
+        if (holder == null || !isLegacyRuntime()) return;
+        try {
+            if (holder instanceof Connection connection) {
+                install(connection);
+                return;
+            }
+            Class<?> c = holder.getClass();
+            while (c != null && c != Object.class) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (!Connection.class.isAssignableFrom(f.getType())) continue;
+                    try {
+                        f.setAccessible(true);
+                        Object val = f.get(holder);
+                        if (val instanceof Connection connection) {
+                            install(connection);
+                            return;
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                c = c.getSuperclass();
+            }
+        } catch (Throwable t) {
+            warnOnce("could not resolve connection from " + holder.getClass().getName() + ": " + t);
         }
     }
 

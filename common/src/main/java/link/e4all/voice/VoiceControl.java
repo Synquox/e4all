@@ -258,13 +258,7 @@ public final class VoiceControl {
                 }
             } catch (Throwable ignored) {}
         }
-        for (String methodName : new String[]{"getPlayer", "method_31284", "method_18784"}) {
-            try {
-                Method m = listener.getClass().getMethod(methodName);
-                Object val = m.invoke(listener);
-                if (val instanceof ServerPlayer sp) return sp;
-            } catch (Throwable ignored) {}
-        }
+        // field reads only to avoid invoking listener methods off-thread
         Class<?> c = listener.getClass();
         while (c != null && c != Object.class) {
             for (Field f : c.getDeclaredFields()) {

@@ -96,5 +96,9 @@
     "text.e4all_minecraft.config.option.reconnectBaseDelaySeconds.tooltip": "Anfängliche Verzögerung in Sekunden vor dem ersten Wiederverbindungsversuch. Verdoppelt sich mit jedem weiteren Versuch (Standard: 2).",
     "text.e4all_minecraft.config.option.keepaliveIntervalSeconds": "Keepalive-Intervall",
     "text.e4all_minecraft.config.option.keepaliveIntervalSeconds.tooltip": "Wie oft (in Sekunden) ein Keepalive an das Relay gesendet wird, um die Sitzung am Leben zu halten (Standard: 15).",
+    "text.e4all_minecraft.config.option.loginReadyTimeoutMs": "Wartezeit für Beitritte (ms)",
+    "text.e4all_minecraft.config.option.loginReadyTimeoutMs.tooltip": "Wie lange ein beitretender Spieler wartet, bis eine ladende Welt ihren ersten Tick beendet hat, bevor die Verbindung abgelehnt wird. Hilft bei großen Modpacks, die kurz hängen. 0 zum sofortigen Ablehnen (Standard: 15000).",
+    "text.e4all_minecraft.config.option.preventPauseWhileHosting": "Welt beim Hosten nicht pausieren",
+    "text.e4all_minecraft.config.option.preventPauseWhileHosting.tooltip": "Minecraft pausiert Einzelspielerwelten im ESC-Menü oder beim Tabben, wodurch verbundene Mitspieler einfrieren. Hält die Welt aktiv, während e4all sie im LAN hostet.",
     "text.e4all_minecraft.relayLost": "§6e4all§r Relay-Verbindung verloren. Öffne die Welt erneut im LAN, um wieder zu hosten, oder führe /e4all restart aus (die Adresse ändert sich)."
 }

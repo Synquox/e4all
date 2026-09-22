@@ -40,6 +40,9 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     private static final ThreadLocal<Class<?>> e4mc$originalChannelClass = new ThreadLocal<>();
     @Unique
     private static final ThreadLocal<EventLoopGroup> e4mc$originalGroup = new ThreadLocal<>();
+    @Unique
+    private static final java.util.concurrent.atomic.AtomicLong e4all$swallowedDecodeErrors =
+            new java.util.concurrent.atomic.AtomicLong();
 
     @Override
     public byte[] e4mc$exportKeyingMaterial(byte[] label, byte[] context, int length) {
@@ -105,6 +108,21 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         } else {
             VoiceBridge.setPendingDialtoneTicket(null);
         }
+    }
+
+    // install legacy payload sniffer (1.18 - 1.20.1) on connect
+    @Inject(method = "connect", at = @At("RETURN"), require = 0)
+    private static void e4all$installLegacyPayloadSnifferOnConnect(InetSocketAddress inetSocketAddress, @Coerce Object obj, Connection connection, CallbackInfoReturnable<ChannelFuture> cir) {
+        try {
+            link.e4all.voice.LegacyPayloadBridge.install(connection);
+        } catch (Throwable ignored) {}
+    }
+
+    @Surrogate
+    private static void e4all$installLegacyPayloadSnifferOnConnect(InetSocketAddress inetSocketAddress, boolean bl, Connection connection, CallbackInfoReturnable<Connection> cir) {
+        try {
+            link.e4all.voice.LegacyPayloadBridge.install(connection);
+        } catch (Throwable ignored) {}
     }
 
     @ModifyArg(method = {"connect", "connectToServer"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;"), require = 0)
@@ -301,7 +319,11 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
                 // relay guests can trigger decode errors for custom_payload packets
                 // from mods the host lacks. framing is intact so skipping one payload is safe
                 if (e4all$isRelayChannel(channel) && text.contains("DecoderException")) {
-                    E4allClient.LOGGER.warn("e4all: swallowed packet decode error on relay connection (guest stays connected): {}", text);
+                    long count = e4all$swallowedDecodeErrors.incrementAndGet();
+                    E4allClient.LOGGER.warn("e4all: dropped one unreadable packet on a relay connection so the "
+                            + "guest stays connected ({} so far). Packet framing is intact, only that payload is "
+                            + "skipped - if the guest can no longer break blocks or receive item/entity updates, "
+                            + "have them reconnect and report this line: {}", count, text);
                     return; // don't disconnect
                 }
                 if (text.contains("SocketException") || text.contains("IOException")) {
