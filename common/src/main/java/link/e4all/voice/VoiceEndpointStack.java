@@ -40,8 +40,8 @@ public final class VoiceEndpointStack {
         try {
             relayMap = QuiclimeSession.getRelayMap();
         } catch (Throwable t) {
-            E4allClient.LOGGER.warn("e4all voice: failed to fetch relay map, using empty", t);
-            relayMap = new String[0];
+            E4allClient.LOGGER.warn("e4all voice: failed to fetch relay map, using default relay list", t);
+            relayMap = QuiclimeSession.getDefaultRelayMap();
         }
         this.endpoint = new Endpoint(
                 new byte[][]{DialtoneAddress.VOICE_ALPN.getBytes(StandardCharsets.UTF_8)},

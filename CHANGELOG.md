@@ -1,10 +1,16 @@
 # Changelog
 
-## 2.1.2
+## 2.2.0
 
-### Fixes
-* bug fixes
-* Also removed xaeros mods compatibility added in e4all that e4mc didn't have as it produced many bugs. I'll readd it once I'm sure there'll be no bugs.
+* Synced upstream changes from e4mc 6.2.1 through 6.2.3.
+* Added `/e4all conninfo <player>` command (or `/e4mc conninfo`) to check connection details and see if someone is on direct P2P or relay (1.20.2+).
+* Updated dependencies (iroh-java 0.1.2, mixinextras-forge 0.5.4).
+* Added 26.4 snapshot 2 support (Fabric).
+* Fixed Krypton compatibility and world joining issues. (krypton is useless alongside e4all but there's still people installing krypton and e4all)
+* Fixed crash on Minecraft versions 1.19-1.19.2 caused by the NoChatReports integration.
+* Reverted some earlier connection changes that weren't in e4mc.
+* Removed Mod Menu config screen and internal cleanups.
+* Other minor fixes.
 
 ## 2.1.1
 

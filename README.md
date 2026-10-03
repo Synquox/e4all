@@ -61,7 +61,7 @@ I only recommend using Krypton if you run an actual server, though I can't say m
 
 | Loader | Supported Minecraft Versions |
 | :--- | :--- |
-| **Fabric** | 1.18.x - 26.3 |
+| **Fabric** | 1.18.x - 26.4-snapshot-2 |
 | **NeoForge** | 1.18.x - 26.3 |
 | **Forge** | 1.18.x - 1.20.4 |
 | **Android** | Android Java wrappers supported! (Windows, Linux and MacOS ofc too)|

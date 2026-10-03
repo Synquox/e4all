@@ -16,6 +16,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.server.level.ServerPlayer;
+
 import java.lang.reflect.Method;
 
 @Mixin(Connection.class)
@@ -45,55 +46,84 @@ public abstract class MixinConnection {
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSend1(Packet<?> packet, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
-        if (!e4all$converting && packet instanceof ClientboundPlayerChatPacket chat) {
-            info.cancel();
-            Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
-            e4all$converting = true;
-            try {
-                ((Connection) (Object) this).send(systemPacket);
-            } finally {
-                e4all$converting = false;
-            }
+        if (e4all$converting || !(packet instanceof ClientboundPlayerChatPacket chat)) return;
+        Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
+        if (systemPacket == null) return;
+        info.cancel();
+        e4all$converting = true;
+        try {
+            ((Connection) (Object) this).send(systemPacket);
+        } finally {
+            e4all$converting = false;
         }
     }
 
     @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V", at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onSendWithListener(Packet<?> packet, @Nullable PacketSendListener listener, CallbackInfo info) {
         if (!link.e4all.Config.INSTANCE.offlineMode.value()) return;
-        if (!e4all$converting && packet instanceof ClientboundPlayerChatPacket chat) {
-            info.cancel();
-            Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
-            e4all$converting = true;
-            try {
-                ((Connection) (Object) this).send(systemPacket);
-            } finally {
-                e4all$converting = false;
-            }
+        if (e4all$converting || !(packet instanceof ClientboundPlayerChatPacket chat)) return;
+        Packet<?> systemPacket = e4all$toSystemChat(packetListener, chat);
+        if (systemPacket == null) return;
+        info.cancel();
+        e4all$converting = true;
+        try {
+            ((Connection) (Object) this).send(systemPacket);
+        } finally {
+            e4all$converting = false;
         }
     }
 
     private static Packet<?> e4all$toSystemChat(PacketListener listener, ClientboundPlayerChatPacket chat) {
-        Component content = e4all$extractContent(chat);
-        Component decorated = e4all$decorate(listener, chat, content);
-        return new ClientboundSystemChatPacket(decorated, false);
+        try {
+            Component content = e4all$extractContent(chat);
+            if (content == null) return null;
+            Component decorated = e4all$decorate(listener, chat, content);
+            return new ClientboundSystemChatPacket(decorated, false);
+        } catch (Throwable t) {
+            link.e4all.E4allClient.LOGGER.warn("e4all: could not convert a chat packet, sending it unchanged", t);
+            return null;
+        }
     }
 
-    @Unique
-    private static Component e4all$extractContent(ClientboundPlayerChatPacket chat) {
-        try {
-            Object unsigned = chat.unsignedContent();
-            if (unsigned instanceof java.util.Optional<?> opt) {
-                if (opt.isPresent() && opt.get() instanceof Component c) {
-                    return c;
-                }
-            } else if (unsigned instanceof Component c) {
-                return c;
-            }
-        } catch (Throwable ignored) {}
-        try {
-            return Component.literal(chat.body().content());
-        } catch (Throwable ignored) {}
-        return Component.literal("");
+    private static Component e4all$extractContent(Object packet) {
+        Object raw = e4all$findRawContent(packet);
+        if (raw == null) return null;
+        if (raw instanceof Component c) {
+            String s = c.getString();
+            return s != null && !s.trim().isEmpty() ? c : null;
+        }
+        if (raw instanceof String s && !s.trim().isEmpty()) {
+            return link.e4all.Mirror.literal(s);
+        }
+        return null;
+    }
+
+    private static Object e4all$findRawContent(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof Component || obj instanceof String) return obj;
+        if (obj instanceof java.util.Optional<?> opt) {
+            return opt.map(MixinConnection::e4all$findRawContent).orElse(null);
+        }
+        String[] accessors = {
+            "serverContent", "getServerContent", "method_44125",
+            "unsignedContent", "getUnsignedContent", "comp_830", "comp_1103",
+            "decoratedContent", "getDecoratedContent", "method_46291",
+            "signedContent", "getSignedContent", "method_44862",
+            "content", "getContent", "comp_929", "comp_1090",
+            "plain", "getPlain", "comp_963",
+            "message", "getMessage", "comp_942", "comp_1097",
+            "body", "getBody", "comp_928"
+        };
+        for (String name : accessors) {
+            try {
+                Method m = obj.getClass().getMethod(name);
+                m.setAccessible(true);
+                Object val = m.invoke(obj);
+                Object res = e4all$findRawContent(val);
+                if (res != null) return res;
+            } catch (Throwable ignored) {}
+        }
+        return null;
     }
 
     // sender name lives in the chat type bound, matched by shape since names differ per loader
@@ -205,32 +235,14 @@ public abstract class MixinConnection {
     private static Object e4all$registryAccess(PacketListener listener) {
         try {
             ServerPlayer player = link.e4all.voice.VoiceControl.extractServerPlayer(listener);
-            if (player != null) {
-                Object level = e4all$noArgObjectNamed(player, "Level");
-                Object access = e4all$noArgObjectNamed(level, "RegistryAccess");
-                if (access != null) return access;
+            if (player != null && player.getServer() != null) {
+                return player.getServer().registryAccess();
             }
-            return e4all$noArgObjectNamed(link.e4all.voice.VoiceControl.extractServerFromListener(listener),
-                    "RegistryAccess");
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
-    private static Object e4all$noArgObjectNamed(Object target, String returnTypeFragment) {
-        if (target == null) return null;
-        for (Method m : target.getClass().getMethods()) {
-            if (m.getParameterCount() != 0) continue;
-            Class<?> ret = m.getReturnType();
-            if (ret.isPrimitive() || ret == void.class || ret == String.class
-                    || ret == Class.class || ret == Object.class) continue;
-            if (!ret.getName().contains(returnTypeFragment)) continue;
-            try {
-                m.setAccessible(true);
-                Object value = m.invoke(target);
-                if (value != null) return value;
-            } catch (Throwable ignored) {}
-        }
+            Object server = link.e4all.voice.VoiceControl.extractServerFromListener(listener);
+            if (server instanceof net.minecraft.server.MinecraftServer ms) {
+                return ms.registryAccess();
+            }
+        } catch (Throwable ignored) {}
         return null;
     }
 
@@ -262,14 +274,37 @@ public abstract class MixinConnection {
         }
     }
 
-    private static java.util.UUID e4all$senderOf(Object chat) {
-        for (Method m : chat.getClass().getMethods()) {
-            if (m.getParameterCount() != 0 || m.getReturnType() != java.util.UUID.class) continue;
+    private static java.util.UUID e4all$senderOf(Object obj) {
+        if (obj == null) return null;
+        for (String name : new String[]{"sender", "getSender", "signer", "getSigner"}) {
             try {
-                m.setAccessible(true);
-                Object value = m.invoke(chat);
-                if (value instanceof java.util.UUID uuid) return uuid;
+                Method m = obj.getClass().getMethod(name);
+                Object val = m.invoke(obj);
+                if (val instanceof java.util.UUID u) return u;
             } catch (Throwable ignored) {}
+        }
+        for (String name : new String[]{"message", "getMessage", "comp_942", "signedHeader", "getSignedHeader", "comp_926"}) {
+            try {
+                Method m = obj.getClass().getMethod(name);
+                Object child = m.invoke(obj);
+                if (child != null) {
+                    for (String sName : new String[]{"sender", "getSender", "signer", "getSigner"}) {
+                        try {
+                            Method sm = child.getClass().getMethod(sName);
+                            Object val = sm.invoke(child);
+                            if (val instanceof java.util.UUID u) return u;
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        for (Method m : obj.getClass().getMethods()) {
+            if (m.getParameterCount() == 0 && m.getReturnType() == java.util.UUID.class) {
+                try {
+                    Object val = m.invoke(obj);
+                    if (val instanceof java.util.UUID u) return u;
+                } catch (Throwable ignored) {}
+            }
         }
         return null;
     }

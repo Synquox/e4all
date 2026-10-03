@@ -22,9 +22,6 @@
     ],
     "voicechat": [
       "link.e4all.voice.E4allVoicechatPlugin"
-    ],
-    "modmenu": [
-      "link.e4all.fabric.E4allModMenu"
     ]
   },
   "mixins": [
@@ -34,9 +31,6 @@
     "fabricloader": ">=0.14.0",
     "fabric-api": "*",
     "minecraft": ">=1.18"
-  },
-  "suggests": {
-    "modmenu": "*"
   },
   "custom": {
     "modmenu": {

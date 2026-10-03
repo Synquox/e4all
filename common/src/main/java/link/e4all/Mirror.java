@@ -817,120 +817,36 @@ public class Mirror {
 
     public static Object createButton(int x, int y, int w, int h, Component text, Object onPress) {
         try {
-            Method builderMethod = null;
             for (Method m : net.minecraft.client.gui.components.Button.class.getMethods()) {
-                if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2) {
-                    if (Component.class.isAssignableFrom(m.getParameterTypes()[0]) && m.getParameterTypes()[1].isInstance(onPress)) {
-                        builderMethod = m;
-                        break;
-                    }
-                }
-            }
-            if (builderMethod == null) {
-                for (Method m : net.minecraft.client.gui.components.Button.class.getDeclaredMethods()) {
-                    if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2) {
-                        if (Component.class.isAssignableFrom(m.getParameterTypes()[0]) && m.getParameterTypes()[1].isInstance(onPress)) {
-                            builderMethod = m;
-                            break;
+                if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2
+                        && Component.class.isAssignableFrom(m.getParameterTypes()[0])) {
+                    Object builder = m.invoke(null, text, onPress);
+                    if (builder != null) {
+                        for (Method bm : builder.getClass().getMethods()) {
+                            if (bm.getParameterCount() == 4 && bm.getParameterTypes()[0] == int.class) {
+                                builder = bm.invoke(builder, x, y, w, h);
+                                break;
+                            }
                         }
-                    }
-                }
-            }
-            if (builderMethod == null) {
-                for (Method m : net.minecraft.client.gui.components.Button.class.getMethods()) {
-                    if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2) {
-                        if (Component.class.isAssignableFrom(m.getParameterTypes()[0]) && m.getParameterTypes()[1].isInterface()) {
-                            builderMethod = m;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            if (builderMethod != null) {
-                builderMethod.setAccessible(true);
-                Object builder = builderMethod.invoke(null, text, onPress);
-                
-                boolean boundsSet = false;
-                for (Method m : builder.getClass().getMethods()) {
-                    if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 4) {
-                        if (m.getParameterTypes()[0].equals(int.class) && m.getParameterTypes()[1].equals(int.class)
-                            && m.getParameterTypes()[2].equals(int.class) && m.getParameterTypes()[3].equals(int.class)) {
-                            m.setAccessible(true);
-                            Object next = m.invoke(builder, x, y, w, h);
-                            if (next != null) builder = next;
-                            boundsSet = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!boundsSet) {
-                    Method posMethod = null;
-                    Method sizeMethod = null;
-                    for (Method m : builder.getClass().getMethods()) {
-                        if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 2 && m.getParameterTypes()[0].equals(int.class) && m.getParameterTypes()[1].equals(int.class)) {
-                            String n = m.getName();
-                            if (n.equals("pos") || n.equals("position") || n.equals("method_46430") || n.equals("m_253074_")) posMethod = m;
-                            else if (n.equals("size") || n.equals("dimensions") || n.equals("method_46432") || n.equals("method_46434") || n.equals("m_253018_")) sizeMethod = m;
-                        }
-                    }
-                    if (posMethod != null) {
-                        posMethod.setAccessible(true);
-                        Object next = posMethod.invoke(builder, x, y);
-                        if (next != null) builder = next;
-                    }
-                    if (sizeMethod != null) {
-                        sizeMethod.setAccessible(true);
-                        Object next = sizeMethod.invoke(builder, w, h);
-                        if (next != null) builder = next;
-                    } else {
-                        for (Method m : builder.getClass().getMethods()) {
-                            if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(int.class)) {
-                                String n = m.getName();
-                                if (n.equals("width") || n.equals("method_46434") || n.equals("m_253086_")) {
-                                    m.setAccessible(true);
-                                    Object next = m.invoke(builder, w);
-                                    if (next != null) builder = next;
-                                    break;
-                                }
+                        for (Method bm : builder.getClass().getMethods()) {
+                            if (bm.getParameterCount() == 0 && net.minecraft.client.gui.components.Button.class.isAssignableFrom(bm.getReturnType())) {
+                                return bm.invoke(builder);
                             }
                         }
                     }
                 }
-                
-                for (Method m : builder.getClass().getMethods()) {
-                    if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 0 && net.minecraft.client.gui.components.Button.class.isAssignableFrom(m.getReturnType())) {
-                        m.setAccessible(true);
-                        return m.invoke(builder);
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            E4allClient.LOGGER.warn("[e4all] Mirror.createButton builder failed", t);
-        }
-        
-        try {
-            Class<?> onPressClass = null;
-            for (Class<?> c : net.minecraft.client.gui.components.Button.class.getDeclaredClasses()) {
-                if (c.isInterface()) {
-                    onPressClass = c;
-                    break;
-                }
-            }
-            for (Constructor<?> ctor : net.minecraft.client.gui.components.Button.class.getDeclaredConstructors()) {
-                Class<?>[] params = ctor.getParameterTypes();
-                if (params.length == 6
-                        && params[0] == int.class && params[1] == int.class
-                        && params[2] == int.class && params[3] == int.class
-                        && Component.class.isAssignableFrom(params[4])
-                        && (onPressClass == null || params[5].isAssignableFrom(onPressClass) || params[5].isInstance(onPress))) {
-                    ctor.setAccessible(true);
-                    return ctor.newInstance(x, y, w, h, text, onPress);
-                }
             }
         } catch (Throwable ignored) {}
-        
+
+        for (Constructor<?> ctor : net.minecraft.client.gui.components.Button.class.getDeclaredConstructors()) {
+            Class<?>[] p = ctor.getParameterTypes();
+            if (p.length == 6 && p[0] == int.class && Component.class.isAssignableFrom(p[4])) {
+                try {
+                    ctor.setAccessible(true);
+                    return ctor.newInstance(x, y, w, h, text, onPress);
+                } catch (Throwable ignored) {}
+            }
+        }
         return null;
     }
 }

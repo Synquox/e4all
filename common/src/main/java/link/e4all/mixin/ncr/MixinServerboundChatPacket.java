@@ -10,7 +10,7 @@ import net.minecraft.network.protocol.game.ServerboundChatPacket;
 @Mixin(ServerboundChatPacket.class)
 public class MixinServerboundChatPacket {
 
-    @Inject(method = "signature", at = @At("RETURN"), cancellable = true, require = 0)
+    @Inject(method = "/^(signature|comp_948)$/", at = @At("RETURN"), cancellable = true, require = 0, remap = false)
     private void e4all$onGetSignature(CallbackInfoReturnable<MessageSignature> info) {
         if (link.e4all.Config.INSTANCE.offlineMode.value()) {
             info.setReturnValue(null);

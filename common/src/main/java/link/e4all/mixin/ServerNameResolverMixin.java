@@ -2,11 +2,9 @@ package link.e4all.mixin;
 
 import link.e4all.Config;
 import link.e4all.E4allClient;
-import link.e4all.Mirror;
 import link.e4all.SmugglersInetSocketAddress;
 import link.e4all.TicketSmuggler;
 import link.e4all.voice.VoiceBridge;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.resolver.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -96,9 +94,6 @@ public class ServerNameResolverMixin {
                                         E4allClient.LOGGER.debug("e4all: no Dialtone ticket for '{}' (HTTP 404), using the relay", host);
                                     } else {
                                         E4allClient.LOGGER.warn("e4all: Unexpected ticket response for '{}': HTTP {} (expected 200 or 404)", host, response.statusCode());
-                                        if (response.statusCode() >= 500) {
-                                            e4all$notifyRelayProblem("text.e4all_minecraft.ticketErrorChat", response.statusCode());
-                                        }
                                     }
                                 }
                             }
@@ -128,22 +123,5 @@ public class ServerNameResolverMixin {
     private static void e4all$smuggleTicket(ServerAddress serverAddress, String ticket) {
         ((TicketSmuggler) (Object) serverAddress).e4mc$setSmuggledTicket(ticket);
         VoiceBridge.setPendingDialtoneTicket(ticket);
-    }
-
-    @Unique
-    private static volatile long e4all$lastRelayNoticeMs = 0L;
-
-    @Unique
-    private static void e4all$notifyRelayProblem(String key, Object... args) {
-        try {
-            if (!link.e4all.Agnos.isClient()) return;
-            long now = System.currentTimeMillis();
-            if (now - e4all$lastRelayNoticeMs < 60_000L) return;
-            e4all$lastRelayNoticeMs = now;
-            Mirror.addMessage(Mirror.withStyle(
-                    Mirror.translatable(key, args),
-                    it -> it.withColor(ChatFormatting.YELLOW)));
-        } catch (Throwable ignored) {
-        }
     }
 }

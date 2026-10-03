@@ -21,7 +21,6 @@ public class DialtoneChannel extends AbstractChannel {
     private static final int MAX_COALESCE_BYTES = 32 * 1024;
     // bigger reads = fewer round trips, guests used to fall through unloaded chunks
     private static final int READ_CHUNK_BYTES = 256 * 1024;
-    private static final long STATS_WINDOW_NANOS = 10_000_000_000L;
     private final ChannelConfig config = new DefaultChannelConfig(this);
     Endpoint endpoint;
     Connection connection;
@@ -31,9 +30,6 @@ public class DialtoneChannel extends AbstractChannel {
     AtomicBoolean writeInFlight = new AtomicBoolean(false);
     AtomicBoolean writePending = new AtomicBoolean(false);
     private long bytesRead;
-    private long firstReadNanos;
-    private long firstMiBNanos;
-    private boolean statsLogged;
 
 
     public DialtoneChannel() {
@@ -47,6 +43,13 @@ public class DialtoneChannel extends AbstractChannel {
 
     public byte[] exportKeyingMaterial(byte[] label, byte[] context, int length) {
         return connection.exportKeyingMaterial(label, context, length);
+    }
+
+    public String debugInfo() {
+        if (connection == null) {
+            return "dialtone (connection not established yet)";
+        }
+        return connection.debugInfo();
     }
 
     @Override
@@ -123,7 +126,7 @@ public class DialtoneChannel extends AbstractChannel {
                     }
                     return;
                 }
-                e4all$trackRead(arr.length);
+                trackRead(arr.length);
                 pipeline().fireChannelRead(Unpooled.wrappedBuffer(arr));
                 pipeline().fireChannelReadComplete();
                 // Schedule next read on event loop to avoid stack overflow from
@@ -143,20 +146,8 @@ public class DialtoneChannel extends AbstractChannel {
         });
     }
 
-    private void e4all$trackRead(int bytes) {
-        long now = System.nanoTime();
-        if (firstReadNanos == 0L) firstReadNanos = now;
+    private void trackRead(int bytes) {
         bytesRead += bytes;
-        if (firstMiBNanos == 0L && bytesRead >= 1024L * 1024L) {
-            firstMiBNanos = now;
-            E4allClient.LOGGER.info("e4all: relayed the first MiB in {} ms (join chunk burst timing)",
-                    (now - firstReadNanos) / 1_000_000L);
-        }
-        if (!statsLogged && now - firstReadNanos > STATS_WINDOW_NANOS) {
-            statsLogged = true;
-            E4allClient.LOGGER.info("e4all: relay receive rate: {} KiB in {} ms",
-                    bytesRead / 1024L, (now - firstReadNanos) / 1_000_000L);
-        }
     }
 
     @Override
@@ -294,6 +285,19 @@ public class DialtoneChannel extends AbstractChannel {
         }
     }
 
+    private void discardLateConnection(Connection conn) {
+        try {
+            conn.close(0, new byte[0]);
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: error closing late dialtone connection", t);
+        }
+        if (connection == conn) {
+            connection = null;
+        }
+        stream = null;
+        closed = true;
+    }
+
     @Override
     public ChannelConfig config() {
         return config;
@@ -335,10 +339,24 @@ public class DialtoneChannel extends AbstractChannel {
                     endpoint
                             .connect(dialtoneAddress.actualAddress, dialtoneAddress.alpn.getBytes(StandardCharsets.UTF_8))
                             .thenAccept(conn -> {
+                                if (closed) {
+                                    discardLateConnection(conn);
+                                    return;
+                                }
                                 connection = conn;
                                 conn.openBi().thenAccept(bidi -> {
+                                    if (closed) {
+                                        try { bidi.close(); } catch (Throwable ignored) {}
+                                        discardLateConnection(conn);
+                                        return;
+                                    }
                                     stream = bidi;
                                     eventLoop().execute(() -> {
+                                        if (closed) {
+                                            try { bidi.close(); } catch (Throwable ignored) {}
+                                            discardLateConnection(conn);
+                                            return;
+                                        }
                                         pipeline().fireChannelActive();
                                         safeSetSuccess(promise);
                                     });

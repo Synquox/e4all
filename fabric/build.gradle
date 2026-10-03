@@ -16,16 +16,9 @@ configurations {
     developmentFabric.extendsFrom common
 }
 
-repositories {
-    maven { url = "https://maven.terraformersmc.com/releases/" }
-}
-
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modApi "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
-
-    // optional integration: compile against mod menu, never bundle or require it
-    modCompileOnly "com.terraformersmc:modmenu:${rootProject.modmenu_version}"
 
     // compileOnly for the TrackedValue field types, runtimeOnly so common's mixins
     // apply at dev launch. the shipped jar uses the bundled copy instead
@@ -60,6 +53,8 @@ processResources {
 
 shadowJar {
     exclude "architectury.common.json"
+    exclude "META-INF/maven/**"
+    exclude "META-INF/native-image/**"
 
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
@@ -190,7 +185,7 @@ publishMods {
         projectId = project.findProperty("curseforgeId") ?: ""
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
-                "26.1", "26.2", "26.3-snapshot-9", "26.3"
+                "26.1", "26.2", "26.3-snapshot-9", "26.3", "26.4-snapshot-1", "26.4-snapshot-2"
         )
 
         requires {
@@ -208,7 +203,7 @@ publishMods {
         file = modernRemapJar.archiveFile
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
-                "26.1", "26.2", "26.3-snapshot-9", "26.3"
+                "26.1", "26.2", "26.3-snapshot-9", "26.3", "26.4-snapshot-1", "26.4-snapshot-2"
         )
 
         requires {

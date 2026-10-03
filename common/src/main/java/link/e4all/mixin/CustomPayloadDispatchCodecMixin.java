@@ -20,7 +20,7 @@ public class CustomPayloadDispatchCodecMixin {
     private void e4all$writeRawPayload(FriendlyByteBuf buf, CustomPacketPayload payload, CallbackInfo ci) {
         try {
             if (!(payload instanceof RawPayload raw)) return;
-            PacketHelper.writeIdAndBytes(buf, raw.e4all$channel(), raw.e4all$data());
+            PacketHelper.writeIdAndBytes(buf, raw.channel(), raw.data());
             ci.cancel();
         } catch (Throwable ignored) {
         }

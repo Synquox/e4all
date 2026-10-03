@@ -38,6 +38,8 @@ public class Config extends ReflectiveConfig {
     public final TrackedValue<Integer> keepaliveIntervalSeconds = this.value(15);
     @Comment("How long (in ms) a guest login may wait for a starting world to finish its first tick before being rejected. Heavy modpacks can stall a full server tick for several seconds; waiting avoids kicking everyone who joins in that window. Set to 0 to reject immediately instead of waiting.")
     public final TrackedValue<Integer> loginReadyTimeoutMs = this.value(15000);
+    @Comment("How long (in ms) the connection to the relay may take before retrying.")
+    public final TrackedValue<Integer> relayConnectTimeoutMs = this.value(15000);
 
     @Comment("Whether to enable offline mode (disables Microsoft authentication for ALL LAN connections, including both tunneled and direct). Toggle via the 'Online Mode' button on the Open to LAN screen.")
     public final TrackedValue<Boolean> offlineMode = this.value(false);
@@ -52,17 +54,4 @@ public class Config extends ReflectiveConfig {
 
     @Comment("Master switch for SVC P2P voice support. When disabled, voice will not be negotiated.")
     public final TrackedValue<Boolean> voiceP2PEnabled = this.value(true);
-    @Comment("Allow pure-Java UDP path when Dialtone is unavailable (e.g. Android, or iroh connection would be relayed)")
-    public final TrackedValue<Boolean> voiceP2PUdpFallback = this.value(true);
-    @Comment("Try direct IPv6 before UDP hole punching")
-    public final TrackedValue<Boolean> voiceP2PEnableIpv6 = this.value(true);
-    @Comment("Request router port mapping (UPnP/NAT-PMP/PCP) on desktop host for UDP voice")
-    public final TrackedValue<Boolean> voiceP2PEnableUpnp = this.value(true);
-    @Comment("Overall voice negotiation timeout in milliseconds")
-    public final TrackedValue<Integer> voiceP2PConnectTimeoutMs = this.value(10000);
-    @Comment("UDP hole punch attempt duration in milliseconds")
-    public final TrackedValue<Integer> voiceP2PPunchDurationMs = this.value(5000);
-    @Comment("Display voice negotiation progress as a HUD status line")
-    public final TrackedValue<Boolean> voiceP2PHudStatus = this.value(true);
-
 }

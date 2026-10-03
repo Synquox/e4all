@@ -7,6 +7,8 @@ import net.minecraft.network.protocol.login.ServerboundKeyPacket;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import net.minecraft.util.Crypt;
 import net.minecraft.util.CryptException;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -23,7 +25,7 @@ import java.security.PublicKey;
 import java.util.Arrays;
 import org.spongepowered.asm.mixin.Unique;
 
-@Mixin(value = ServerLoginPacketListenerImpl.class, priority = 900)
+@Mixin(ServerLoginPacketListenerImpl.class)
 public class ServerLoginPacketListenerImplMixin {
     @Shadow @Final
     Connection connection;
@@ -75,32 +77,29 @@ public class ServerLoginPacketListenerImplMixin {
         return Arrays.equals(lhs, rhs);
     }
 
-    @Unique
-    private static final SecretKey e4all$DUMMY_SECRET_KEY = new javax.crypto.spec.SecretKeySpec(new byte[16], "AES");
-
     @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/login/ServerboundKeyPacket;getSecretKey(Ljava/security/PrivateKey;)Ljavax/crypto/SecretKey;"), require = 0)
     private SecretKey getSecretKey(ServerboundKeyPacket instance, PrivateKey privateKey) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
-            return e4all$DUMMY_SECRET_KEY;
+            return null;
         }
         return instance.getSecretKey(privateKey);
     }
 
-    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"), require = 0)
-    private Cipher getCipher(int i, Key key) throws CryptException {
+    @WrapOperation(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"), require = 0)
+    private Cipher getCipher(int i, Key key, Operation<Cipher> original) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
         }
-        return Crypt.getCipher(i, key);
+        return original.call(i, key);
     }
 
-    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V"), require = 0)
-    private void e4all$setEncryptionKey(Connection instance, Cipher decrypt, Cipher encrypt) {
+    @WrapOperation(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V"), require = 0)
+    private void e4all$setEncryptionKey(Connection instance, Cipher decrypt, Cipher encrypt, Operation<Void> original) {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
-            return; // relayed: skip vanilla encryption setup
+            return;
         }
         if (decrypt != null && encrypt != null) {
-            instance.setEncryptionKey(decrypt, encrypt); // vanilla behavior
+            original.call(instance, decrypt, encrypt);
         }
     }
 

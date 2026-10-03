@@ -16,7 +16,6 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -25,16 +24,12 @@ import java.util.Set;
 // and hand the e4all:voice channel to VoiceControl
 public final class LegacyPayloadBridge {
     private static final String HANDLER_NAME = "e4all_legacy_payload";
-    private static final String RAW_CACHE_HANDLER_NAME = "e4all_legacy_raw_frame_cache";
     private static final String VOICE_CHANNEL_NAME = "e4all:voice";
     // 1.20.2+ payload packets
     private static final String[] MODERN_PAYLOAD_PACKET = {
             "net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket",
             "net.minecraft.class_8709"
     };
-
-    private static final Map<Channel, byte[]> LAST_RAW_FRAMES =
-            Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     private static volatile Boolean legacyRuntime;
     private static final Set<Connection> INSTALLED =
@@ -93,8 +88,6 @@ public final class LegacyPayloadBridge {
                     break;
                 }
             }
-
-            installRawFrameCacher(channel, pipeline, vanillaDispatch);
 
             if (vanillaDispatch != null) {
                 pipeline.addBefore(vanillaDispatch, HANDLER_NAME, sniffer);
@@ -155,105 +148,6 @@ public final class LegacyPayloadBridge {
         return null;
     }
 
-    // cache frames before the decoder, compression is off on relay connections
-    private static void installRawFrameCacher(Channel channel, ChannelPipeline pipeline, String vanillaDispatch) {
-        try {
-            if (pipeline.get(RAW_CACHE_HANDLER_NAME) != null) return;
-            String decoderName = null;
-            for (Map.Entry<String, ChannelHandler> entry : pipeline.toMap().entrySet()) {
-                String name = entry.getKey();
-                if (name.equals("decoder") || name.equals("packet_decoder") || name.equals("unpack")) {
-                    decoderName = name;
-                    break;
-                }
-            }
-            if (decoderName == null) return;
-            pipeline.addBefore(decoderName, RAW_CACHE_HANDLER_NAME, new RawFrameCacher());
-            E4allClient.LOGGER.info("e4all voice: raw frame cache installed before '{}' (1.18 - 1.20.1 payload recovery)", decoderName);
-        } catch (Throwable t) {
-            E4allClient.LOGGER.debug("e4all voice: could not install the raw frame cache", t);
-        }
-    }
-
-    // [varint packetId][varint channelLen][channel utf8][payload bytes...]
-    private static byte[] parseVoicePayloadFromFrame(byte[] frame) {
-        try {
-            int[] idx = {0};
-            if (!skipVarint(frame, idx)) return null;
-            int[] len = {0};
-            if (!readVarint(frame, idx, len)) return null;
-            if (len[0] <= 0 || len[0] > 64 || idx[0] + len[0] > frame.length) return null;
-            String channel = new String(frame, idx[0], len[0], StandardCharsets.US_ASCII);
-            if (!VOICE_CHANNEL_NAME.equals(channel)) return null;
-            idx[0] += len[0];
-            int payload = frame.length - idx[0];
-            if (payload < 1 || payload > 32767) return null;
-            byte[] data = new byte[payload];
-            System.arraycopy(frame, idx[0], data, 0, payload);
-            return data;
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
-    private static boolean readVarint(byte[] buf, int[] idx, int[] out) {
-        int value = 0;
-        int shift = 0;
-        while (true) {
-            if (idx[0] >= buf.length || shift >= 32) return false;
-            byte b = buf[idx[0]++];
-            value |= (b & 0x7F) << shift;
-            if ((b & 0x80) == 0) {
-                out[0] = value;
-                return true;
-            }
-            shift += 7;
-        }
-    }
-
-    private static boolean skipVarint(byte[] buf, int[] idx) {
-        return readVarint(buf, idx, new int[1]);
-    }
-
-    // relay connections only (no compression wrapper around the frame)
-    private static byte[] recoverFromRawFrame(Connection connection, boolean clientbound) {
-        try {
-            Channel ch = channelOf(connection);
-            if (ch == null) return null;
-            byte[] frame = LAST_RAW_FRAMES.get(ch);
-            if (frame == null) return null;
-            byte[] data = parseVoicePayloadFromFrame(frame);
-            if (data != null) {
-                E4allClient.LOGGER.info("e4all voice: recovered {} control message from raw frame ({} bytes)",
-                        clientbound ? "clientbound" : "serverbound", data.length);
-            }
-            return data;
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
-    private static final class RawFrameCacher extends ChannelInboundHandlerAdapter {
-        @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            try {
-                if (msg instanceof ByteBuf buf && buf.refCnt() > 0) {
-                    int readable = buf.readableBytes();
-                    if (readable > 0 && readable <= 4096) {
-                        byte[] copy = new byte[readable];
-                        buf.getBytes(buf.readerIndex(), copy);
-                        LAST_RAW_FRAMES.put(ctx.channel(), copy);
-                    } else {
-                        LAST_RAW_FRAMES.remove(ctx.channel());
-                    }
-                }
-            } catch (Throwable ignored) {
-            }
-            super.channelRead(ctx, msg);
-        }
-    }
-
-    // server side only: the game packet listener holds the ServerPlayer
     private static Object listenerOf(Connection connection) {
         Class<?> c = connection.getClass();
         while (c != null && c != Object.class) {
@@ -360,9 +254,6 @@ public final class LegacyPayloadBridge {
             if (!clientbound && !serverbound) return;
             if (!VoiceControlPayload.isOwnChannel(channelIdOf(packet))) return;
             byte[] data = dataOf(packet);
-            if (data == null || data.length < 1) {
-                data = recoverFromRawFrame(connection, clientbound);
-            }
             if (data == null || data.length < 1) {
                 E4allClient.LOGGER.warn("e4all voice: saw an e4all:voice payload on this connection but could not read its bytes ({})",
                         clientbound ? "clientbound" : "serverbound");

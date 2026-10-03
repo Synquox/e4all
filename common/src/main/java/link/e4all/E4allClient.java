@@ -1,10 +1,13 @@
 package link.e4all;
 
 import com.mojang.brigadier.CommandDispatcher;
+import link.e4all.mixin.E4allMixinPlugin;
+import link.e4all.mixin.ServerCommonPacketListenerImplAccessor;
 import link.e4all.voice.VoiceControlPayload;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
@@ -145,6 +148,21 @@ public class E4allClient {
                 Commands.literal("e4mc")
                         .redirect(dispatcher.getRoot().getChild("e4all"))
         );
+
+        if (E4allMixinPlugin.hasModernPayloads()) {
+            dispatcher.getRoot().getChild("e4all").addChild(
+                    Commands.literal("conninfo").requires(E4allClient::canManage)
+                            .then(Commands.argument("player", EntityArgument.player()).executes(ctx -> {
+                                var player = EntityArgument.getPlayer(ctx, "player");
+                                var connection = ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
+                                var diag = ((DialtoneConnectionExtensions) connection).e4mc$connInfo();
+                                LOGGER.info("e4all connection information report for {}:\n{}", player.getName().getString(), diag);
+                                Mirror.sendSuccessToSource(ctx.getSource(), Mirror.literal(diag));
+                                return 1;
+                            }))
+                            .build()
+            );
+        }
     }
 
     private static final String DISCORD_URL = "https://discord.gg/McAy9u56NC";

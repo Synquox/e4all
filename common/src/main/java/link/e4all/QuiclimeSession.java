@@ -38,6 +38,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -47,12 +49,16 @@ import java.util.function.Consumer;
 public class QuiclimeSession {
     private static final Gson gson = new Gson();
     private static final Logger LOGGER = LoggerFactory.getLogger(E4allClient.MOD_ID);
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     private static final int RECONNECT_BASE_DELAY_SECONDS = 2;
     private static final int KEEPALIVE_INTERVAL_SECONDS = 15;
-    private static final int MAX_IDLE_TIMEOUT_SECONDS = 60;
+    private static final int MAX_IDLE_TIMEOUT_SECONDS = 15;
+    private static final int RELAY_CONNECT_TIMEOUT_MS = 15_000;
 
     private int getMaxReconnectAttempts() {
         try { return Config.INSTANCE.reconnectMaxAttempts.value(); } catch (Throwable t) { return MAX_RECONNECT_ATTEMPTS; }
@@ -62,6 +68,9 @@ public class QuiclimeSession {
     }
     private int getKeepaliveInterval() {
         try { return Config.INSTANCE.keepaliveIntervalSeconds.value(); } catch (Throwable t) { return KEEPALIVE_INTERVAL_SECONDS; }
+    }
+    private int getRelayConnectTimeoutMs() {
+        try { return Config.INSTANCE.relayConnectTimeoutMs.value(); } catch (Throwable t) { return RELAY_CONNECT_TIMEOUT_MS; }
     }
 
     final ChannelHandler handler;
@@ -231,6 +240,7 @@ public class QuiclimeSession {
     private volatile QuicStreamChannel controlStreamChannel;
     private volatile String cachedTicket;
     private volatile ScheduledFuture<?> keepaliveFuture;
+    private volatile ScheduledFuture<?> connectWatchdogFuture;
     private final AtomicInteger reconnectCount = new AtomicInteger(0);
     private volatile long lastCapabilitiesResponseTime;
     private final AtomicInteger missedKeepaliveCount = new AtomicInteger(0);
@@ -287,30 +297,35 @@ public class QuiclimeSession {
         "https://oc.e4mc.link:8443",
         "https://sg.e4mc.link:8443",
         "https://us.e4mc.link:8443",
-        "https://cl.e4mc.link:8443"
+        "https://cl.e4mc.link:8443",
+        "https://ca.e4mc.link:8443"
     };
-    private static volatile String[] cachedRelayMap = null;
+    private static String[] cachedRelayMap = null;
 
-    public static String[] getRelayMap() throws Exception {
-        if (cachedRelayMap != null) {
-            return cachedRelayMap;
+    public static synchronized String[] getRelayMap() {
+        if (cachedRelayMap == null) {
+            cachedRelayMap = fetchRelayMap();
         }
+        return cachedRelayMap;
+    }
+
+    public static String[] getDefaultRelayMap() {
+        return DEFAULT_RELAY_MAP;
+    }
+
+    private static String[] fetchRelayMap() {
         try {
             var url = new URI(Config.INSTANCE.dialtoneRelayMap.value());
-            LOGGER.info("relaymap req: {} GET", url);
             var response = httpFetch(url);
-            LOGGER.info("relaymap resp: status {} body {}", response.status, response.body);
             if (response.status == 200) {
                 String[] parsed = gson.fromJson(response.body, String[].class);
                 if (parsed != null && parsed.length > 0) {
-                    cachedRelayMap = parsed;
                     return parsed;
                 }
             }
         } catch (Throwable t) {
             LOGGER.warn("Failed to fetch dynamic relay map, using default relay list", t);
         }
-        cachedRelayMap = DEFAULT_RELAY_MAP;
         return DEFAULT_RELAY_MAP;
     }
 
@@ -319,7 +334,7 @@ public class QuiclimeSession {
             return NetDns.httpGet(uri);
         }
         var request = HttpRequest.newBuilder(uri)
-                .timeout(java.time.Duration.ofSeconds(3))
+                .timeout(java.time.Duration.ofSeconds(10))
                 .header("Accept", "application/json")
                 .build();
         var response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
@@ -379,6 +394,7 @@ public class QuiclimeSession {
                     return;
                 }
                 datagramChannel = (DatagramChannel) ((ChannelFuture) datagramChannelFuture).channel();
+                startConnectWatchdog(datagramChannel.eventLoop());
                 QuicChannel.newBootstrap(datagramChannel)
                         .streamOption(ChannelOption.ALLOW_HALF_CLOSURE, false)
                         .streamHandler(new ChannelInitializer<QuicStreamChannel>() {
@@ -419,60 +435,13 @@ public class QuiclimeSession {
                                 super.channelInactive(ctx);
                                 LOGGER.warn("QUIC channel became inactive (relay connection lost)");
                                 cancelKeepalive();
-                                if (state == State.STOPPING || state == State.STOPPED) {
-                                    state = State.STOPPED;
-                                    return;
-                                }
-                                if (ownerServer != null && ownerServer.isStopped()) {
-                                    state = State.STOPPED;
-                                    return;
-                                }
-                                int attempts = reconnectCount.incrementAndGet();
-                                if (attempts <= getMaxReconnectAttempts()) {
-                                    state = State.RECONNECTING;
-                                    int delay = getReconnectBaseDelay() * (1 << (attempts - 1));
-                                    LOGGER.info("Auto-reconnecting to relay in {}s (attempt {}/{})", delay, attempts, getMaxReconnectAttempts());
-                                    if (Agnos.isClient()) {
-                                        Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.reconnecting"));
-                                    }
-                                    var reconnectThread = new Thread(() -> {
-                                        try {
-                                            Thread.sleep(delay * 1000L);
-                                            synchronized (E4allClient.SESSION_LOCK) {
-                                                State currentState = state;
-                                                if (currentState == State.RECONNECTING) {
-                                                    QuiclimeSession.this.cleanupControlChannels();
-                                                    start();
-                                                } else {
-                                                    LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
-                                                }
-                                            }
-                                        } catch (InterruptedException ignored) {
-                                            state = State.STOPPED;
-                                        } catch (Throwable e) {
-                                            LOGGER.error("Failed to reconnect", e);
-                                            state = State.STOPPED;
-                                            link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
-                                            if (Agnos.isClient()) {
-                                                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.relayLost"));
-                                            }
-                                        }
-                                    }, "e4all_minecraft-reconnect");
-                                    reconnectThread.setDaemon(true);
-                                    reconnectThread.start();
-                                } else {
-                                    LOGGER.error("Max reconnect attempts ({}) reached; giving up. Re-open the world to LAN or run /e4all restart.", getMaxReconnectAttempts());
-                                    state = State.STOPPED;
-                                    link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
-                                    if (Agnos.isClient()) {
-                                        Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.maxReconnectFailed"));
-                                    }
-                                }
+                                beginReconnect();
                             }
                         })
                         .remoteAddress(new InetSocketAddress(resolvePreferIpv4(relayInfo.host), relayInfo.port))
                         .connect()
                         .addListener(quicChannelFuture -> {
+                    cancelConnectWatchdog();
                     if (!quicChannelFuture.isSuccess()) {
                         fail(quicChannelFuture.cause());
                         return;
@@ -698,7 +667,15 @@ public class QuiclimeSession {
                             });
                     int missed = missedKeepaliveCount.incrementAndGet();
                     if (missed >= 3) {
-                        LOGGER.warn("Relay link unhealthy: {} consecutive keepalive probes unanswered", missed);
+                        LOGGER.warn("Relay link unhealthy: {} consecutive keepalive probes unanswered; recycling the relay connection", missed);
+                        if (missed == 3) {
+                            try {
+                                channel.close();
+                            } catch (Throwable t) {
+                                LOGGER.debug("e4all: error closing unhealthy relay channel", t);
+                                beginReconnect();
+                            }
+                        }
                     }
                 } catch (Throwable t) {
                     LOGGER.warn("Keepalive probe failed", t);
@@ -714,6 +691,40 @@ public class QuiclimeSession {
         keepaliveFuture = null;
     }
 
+    private void cancelConnectWatchdog() {
+        ScheduledFuture<?> future = connectWatchdogFuture;
+        if (future != null && !future.isCancelled()) {
+            future.cancel(false);
+        }
+        connectWatchdogFuture = null;
+    }
+
+    private void startConnectWatchdog(EventLoop loop) {
+        cancelConnectWatchdog();
+        int timeoutMs = getRelayConnectTimeoutMs();
+        connectWatchdogFuture = loop.schedule(() -> {
+            connectWatchdogFuture = null;
+            if (quicChannel != null) {
+                return;
+            }
+            State current = state;
+            if (current == State.STOPPING || current == State.STOPPED) {
+                return;
+            }
+            LOGGER.warn("Relay connect did not complete within {} ms, treating it as failed", timeoutMs);
+            DatagramChannel dc = datagramChannel;
+            datagramChannel = null;
+            if (dc != null) {
+                try {
+                    dc.close();
+                } catch (Throwable t) {
+                    LOGGER.debug("e4all: error closing datagram channel after connect timeout", t);
+                }
+            }
+            fail(new java.util.concurrent.TimeoutException("relay connect timed out after " + timeoutMs + " ms"));
+        }, timeoutMs, TimeUnit.MILLISECONDS);
+    }
+
     private void cleanupControlChannels() {
         controlStreamChannel = null;
         try {
@@ -724,6 +735,7 @@ public class QuiclimeSession {
             LOGGER.warn("Error closing QUIC channel during control cleanup", e);
         }
         quicChannel = null;
+        cancelConnectWatchdog();
         try {
             if (datagramChannel != null && datagramChannel.isOpen()) {
                 datagramChannel.close();
@@ -742,6 +754,86 @@ public class QuiclimeSession {
             Mirror.addMessage(Mirror.append(Mirror.translatable("text.e4all_minecraft.error"),
                     Mirror.literal(" (" + e.getClass().getSimpleName() + ")")));
         }
+        recoverFromFailure();
+    }
+
+    private void recoverFromFailure() {
+        State current = state;
+        if (current == State.STOPPING || current == State.STOPPED) {
+            return;
+        }
+        if (ownerServer != null && ownerServer.isStopped()) {
+            state = State.STOPPED;
+            return;
+        }
+        QuicChannel channel = quicChannel;
+        if (channel != null && channel.isOpen()) {
+            try {
+                channel.close();
+                return;
+            } catch (Throwable t) {
+                E4allClient.LOGGER.debug("e4all: error closing relay channel after failure", t);
+            }
+        }
+        beginReconnect();
+    }
+
+    private synchronized void beginReconnect() {
+        State current = state;
+        if (current == State.STOPPING || current == State.STOPPED || current == State.RECONNECTING) {
+            return;
+        }
+        if (ownerServer != null && ownerServer.isStopped()) {
+            state = State.STOPPED;
+            return;
+        }
+        cancelKeepalive();
+        int attempts = reconnectCount.incrementAndGet();
+        boolean host = ownerServer != null;
+        if (!host && attempts > getMaxReconnectAttempts()) {
+            LOGGER.error("Max reconnect attempts ({}) reached; giving up. Re-open the world to LAN or run /e4all restart.", getMaxReconnectAttempts());
+            state = State.STOPPED;
+            link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
+            if (Agnos.isClient()) {
+                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.maxReconnectFailed"));
+            }
+            return;
+        }
+        state = State.RECONNECTING;
+        int delay = Math.min(getReconnectBaseDelay() * attempts, 60);
+        if (host && attempts > getMaxReconnectAttempts()) {
+            LOGGER.warn("Host relay reconnect attempt {}; still trying (capped backoff)", attempts);
+        } else {
+            LOGGER.info("Auto-reconnecting to relay in {}s (attempt {}/{})", delay, attempts, getMaxReconnectAttempts());
+            if (Agnos.isClient()) {
+                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.reconnecting"));
+            }
+        }
+        var reconnectThread = new Thread(() -> {
+            try {
+                Thread.sleep(delay * 1000L);
+                synchronized (E4allClient.SESSION_LOCK) {
+                    State currentState = state;
+                    if (currentState == State.RECONNECTING) {
+                        QuiclimeSession.this.cleanupControlChannels();
+                        start();
+                    } else {
+                        LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
+                    }
+                }
+            } catch (InterruptedException ignored) {
+                state = State.STOPPED;
+            } catch (Throwable e) {
+                LOGGER.error("Failed to reconnect", e);
+                state = State.STOPPED;
+                link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
+                if (Agnos.isClient()) {
+                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.relayLost"));
+                }
+            }
+        }, "e4all_minecraft-reconnect");
+        reconnectThread.setDaemon(true);
+        reconnectThread.start();
     }
 
     private void failWithDiagnostics(Throwable e) {
@@ -799,6 +891,7 @@ public class QuiclimeSession {
     public void stop() {
         state = State.STOPPING;
         cancelKeepalive();
+        cancelConnectWatchdog();
         controlStreamChannel = null;
         link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
         // async, a stuck native close would freeze the game here

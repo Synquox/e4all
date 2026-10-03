@@ -28,7 +28,7 @@ dependencies {
 test {
     useJUnitPlatform()
     testLogging {
-        events "passed", "skipped", "failed"
+        events "failed", "skipped"
         exceptionFormat "full"
     }
 }
@@ -47,8 +47,9 @@ tasks.register('unstubbedJar', Jar) {
 tasks.register('unstubbedSourcesJar', Jar) {
     archiveClassifier = 'unstubbed-sources'
 
-    from zipTree(jar.archiveFile)
-    exclude("link/e4mc/Agnos.java")
+    from sourceSets.main.allJava
+    exclude("link/e4all/Agnos.java")
+    exclude "assets/e4all/natives/**"
 }
 
 artifacts {

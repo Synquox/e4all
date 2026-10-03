@@ -3,10 +3,7 @@ package link.e4all;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.SNIHostName;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLSocket;
+import java.net.HttpURLConnection;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -144,136 +141,17 @@ public final class NetDns {
         return host.indexOf(':') >= 0 || host.matches("\\d{1,3}(\\.\\d{1,3}){3}");
     }
 
-    // raw sockets, netty's http codec is missing on older mc versions
     public static Response httpGet(URI uri) throws Exception {
-        String host = uri.getHost();
-        boolean tls = "https".equalsIgnoreCase(uri.getScheme());
-        int defaultPort = tls ? 443 : 80;
-        int port = uri.getPort() == -1 ? defaultPort : uri.getPort();
-        InetAddress addr = resolve(host);
-
-        Socket socket = tls
-                ? (SSLSocket) SSLContext.getDefault().getSocketFactory().createSocket()
-                : new Socket();
-        try {
-            socket.connect(new InetSocketAddress(addr, port), 10000);
-            socket.setSoTimeout(20000);
-            if (tls) {
-                SSLSocket ssl = (SSLSocket) socket;
-                SSLParameters params = ssl.getSSLParameters();
-                params.setServerNames(List.of(new SNIHostName(host)));
-                params.setEndpointIdentificationAlgorithm("HTTPS");
-                ssl.setSSLParameters(params);
-            }
-            return sendRequest(socket, uri, host, port, defaultPort);
-        } finally {
-            try { socket.close(); } catch (IOException ignored) {}
-        }
-    }
-
-    private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
-
-    private static Response sendRequest(Socket socket, URI uri, String host, int port, int defaultPort) throws IOException {
-        String path = uri.getRawPath() == null ? "/" : uri.getRawPath();
-        if (uri.getRawQuery() != null) path += "?" + uri.getRawQuery();
-        String hostHeader = host + (port == defaultPort ? "" : ":" + port);
-
-        OutputStream out = socket.getOutputStream();
-        out.write(("GET " + path + " HTTP/1.1\r\n"
-                + "Host: " + hostHeader + "\r\n"
-                + "Accept: application/json\r\n"
-                + "Connection: close\r\n"
-                + "User-Agent: e4all\r\n"
-                + "\r\n").getBytes(StandardCharsets.US_ASCII));
-        out.flush();
-
-        InputStream in = socket.getInputStream();
-        String statusLine = readAsciiLine(in);
-        if (statusLine == null || !statusLine.startsWith("HTTP/")) {
-            throw new IOException("malformed http response: " + statusLine);
-        }
-        String[] statusParts = statusLine.split(" ", 3);
-        if (statusParts.length < 2) {
-            throw new IOException("malformed status line: " + statusLine);
-        }
-        int status = Integer.parseInt(statusParts[1]);
-
-        Map<String, String> headers = new HashMap<>();
-        String h;
-        while ((h = readAsciiLine(in)) != null && !h.isEmpty()) {
-            int sep = h.indexOf(':');
-            if (sep > 0) {
-                headers.put(h.substring(0, sep).trim().toLowerCase(Locale.ROOT),
-                        h.substring(sep + 1).trim());
-            }
-        }
-
-        byte[] body = readBody(in, headers);
-        return new Response(status, new String(body, StandardCharsets.UTF_8));
-    }
-
-    // Connection: close is always requested, but some servers still send content-length or chunked
-    private static byte[] readBody(InputStream in, Map<String, String> headers) throws IOException {
-        String te = headers.get("transfer-encoding");
-        if (te != null && te.toLowerCase(Locale.ROOT).contains("chunked")) {
-            ByteArrayOutputStream body = new ByteArrayOutputStream();
-            String h;
-            while (true) {
-                String sizeLine = readAsciiLine(in);
-                if (sizeLine == null) break;
-                int size = Integer.parseInt(sizeLine.split(";", 2)[0].trim(), 16);
-                if (size == 0) {
-                    while ((h = readAsciiLine(in)) != null && !h.isEmpty()) {}
-                    break;
-                }
-                byte[] chunk = new byte[size];
-                int read = 0;
-                while (read < size) {
-                    int r = in.read(chunk, read, size - read);
-                    if (r == -1) throw new IOException("truncated chunked body");
-                    read += r;
-                }
-                body.write(chunk, 0, size);
-                if (body.size() > MAX_BODY_BYTES) throw new IOException("response body too large");
-                readAsciiLine(in);
-            }
-            return body.toByteArray();
-        }
-        String contentLength = headers.get("content-length");
-        if (contentLength != null) {
-            return readFully(in, Integer.parseInt(contentLength.trim()));
-        }
-        ByteArrayOutputStream body = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int r;
-        while ((r = in.read(buf)) != -1) {
-            body.write(buf, 0, r);
-            if (body.size() > MAX_BODY_BYTES) throw new IOException("response body too large");
-        }
-        return body.toByteArray();
-    }
-
-    private static byte[] readFully(InputStream in, int len) throws IOException {
-        if (len > MAX_BODY_BYTES) throw new IOException("response body too large");
-        byte[] out = new byte[len];
-        int read = 0;
-        while (read < len) {
-            int r = in.read(out, read, len - read);
-            if (r == -1) throw new IOException("truncated response body");
-            read += r;
-        }
-        return out;
-    }
-
-    private static String readAsciiLine(InputStream in) throws IOException {
-        ByteArrayOutputStream line = new ByteArrayOutputStream(80);
-        int b;
-        while ((b = in.read()) != -1) {
-            if (b == '\n') break;
-            if (b != '\r') line.write(b);
-        }
-        if (b == -1 && line.size() == 0) return null;
-        return line.toString("US-ASCII");
+        HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(20000);
+        conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("User-Agent", "e4all");
+        int status = conn.getResponseCode();
+        InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        String body = in != null ? new String(in.readAllBytes(), StandardCharsets.UTF_8) : "";
+        conn.disconnect();
+        return new Response(status, body);
     }
 
     private static LookupResult lookup(String host) throws IOException {

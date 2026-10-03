@@ -135,19 +135,18 @@ public final class HostVoiceNegotiator {
 
         if (!AndroidDetector.isAndroid() && Config.INSTANCE.dialtoneHostEnabled.value()) {
             ensureVoiceEndpoint();
-            // wait for direct addresses to resolve
-            for (int i = 0; i < 25; i++) {
-                if (voiceTicket != null && voiceTicket.length() > 95) break;
+            for (int i = 0; i < 10; i++) {
+                if (voiceTicket != null && !voiceTicket.isEmpty()) break;
                 DialtoneServerChannel ch = voiceServerChannel;
                 if (ch != null && ch.isActive() && ch.getEndpoint() != null) {
                     String addr = ch.getEndpoint().address();
-                    if (addr != null && addr.length() > 95) {
+                    if (addr != null && !addr.isEmpty()) {
                         voiceTicket = addr;
                         break;
                     }
                 }
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(200);
                 } catch (InterruptedException ignored) {
                     break;
                 }
@@ -163,12 +162,10 @@ public final class HostVoiceNegotiator {
                 transport = VoiceControl.TRANSPORT_DIALTONE;
                 ticket = voiceTicket;
             } else {
-                // no Dialtone ticket; UDP fallback not implemented, so offer nothing
                 transport = VoiceControl.TRANSPORT_NONE;
                 failure = VoiceFailure.TRANSPORT_UNAVAILABLE;
             }
         } else {
-            // Android host or Dialtone disabled: no P2P voice transport available
             transport = VoiceControl.TRANSPORT_NONE;
             failure = VoiceFailure.TRANSPORT_UNAVAILABLE;
         }
@@ -182,12 +179,6 @@ public final class HostVoiceNegotiator {
 
         VoiceControl.sendToPlayer(player, VoiceControl.encodeOffer(
                 transport, ticket, List.of(), failure));
-
-        if (transport == VoiceControl.TRANSPORT_DIALTONE && ticket.length() <= 95) {
-            E4allClient.LOGGER.info(
-                    "e4all voice: OFFER carries a relay/rendezvous ticket (length={}); guest dial may exceed the 20s negotiation timer, late relay recovery will cover it",
-                    ticket.length());
-        }
     }
 
     public void onResult(ServerPlayer player, boolean ok, byte transport,
@@ -200,7 +191,6 @@ public final class HostVoiceNegotiator {
         NegotiationState state = negotiations.remove(player.getStringUUID());
         if (state == null) {
             if (ok && transport == VoiceControl.TRANSPORT_DIALTONE) {
-                // accept late result as recovery
                 E4allClient.LOGGER.info(
                         "e4all voice: late RESULT(ok) from {} - accepting as relay recovery (voice stream handshake already complete)",
                         player.getScoreboardName());

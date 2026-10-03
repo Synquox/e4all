@@ -37,7 +37,7 @@ dependencies {
     }
     shadowCommon("dev.dirs:directories:${rootProject.dirs_version}")
 
-    implementation(include("io.github.llamalad7:mixinextras-forge:0.5.3"))
+    implementation(include("io.github.llamalad7:mixinextras-forge:0.5.4"))
 }
 
 processResources {
@@ -52,6 +52,8 @@ processResources {
 shadowJar {
     exclude "fabric.mod.json"
     exclude "architectury.common.json"
+    exclude "META-INF/maven/**"
+    exclude "META-INF/native-image/**"
 
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"

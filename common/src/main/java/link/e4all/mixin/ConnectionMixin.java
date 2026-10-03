@@ -37,10 +37,6 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     @Unique
     private static final ThreadLocal<DialtoneAddress> e4mc$smuggledDialtoneAddress = new ThreadLocal<>();
     @Unique
-    private static final ThreadLocal<Class<?>> e4mc$originalChannelClass = new ThreadLocal<>();
-    @Unique
-    private static final ThreadLocal<EventLoopGroup> e4mc$originalGroup = new ThreadLocal<>();
-    @Unique
     private static final java.util.concurrent.atomic.AtomicLong e4all$swallowedDecodeErrors =
             new java.util.concurrent.atomic.AtomicLong();
 
@@ -50,6 +46,14 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
             return dialtoneChannel.exportKeyingMaterial(label, context, length);
         }
         return null;
+    }
+
+    @Override
+    public String e4mc$connInfo() {
+        if (channel instanceof DialtoneChannel dialtoneChannel) {
+            return dialtoneChannel.debugInfo();
+        }
+        return channel == null ? "no channel" : channel.getClass().getCanonicalName();
     }
 
     @Inject(method = "connect", at = @At("HEAD"), require = 0)
@@ -93,7 +97,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     }
 
     @Inject(method = "connectToServer", at = @At("HEAD"), require = 0)
-    private static void hijackStartAlt(InetSocketAddress inetSocketAddress, boolean bl, CallbackInfoReturnable<Connection> cir) {
+    private static void hijackStartAlt(InetSocketAddress inetSocketAddress, boolean bl, @Coerce Object sampleLogger, CallbackInfoReturnable<Connection> cir) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
         } else {
@@ -102,7 +106,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     }
 
     @Surrogate
-    private static void hijackStartAlt(InetSocketAddress inetSocketAddress, boolean bl, @Coerce Object sampleLogger, CallbackInfoReturnable<Connection> cir) {
+    private static void hijackStartAlt(InetSocketAddress inetSocketAddress, boolean bl, @Coerce Object sampleLogger, CallbackInfo ci) {
         if (inetSocketAddress instanceof SmugglersInetSocketAddress smuggledAddress) {
             e4mc$smuggledDialtoneAddress.set(new DialtoneAddress(smuggledAddress.ticket));
         } else {
@@ -128,7 +132,6 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     @ModifyArg(method = {"connect", "connectToServer"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;"), require = 0)
     private static Class hijackChannel(Class clazz) {
         if (e4mc$smuggledDialtoneAddress.get() != null) {
-            e4mc$originalChannelClass.set(clazz);
             return DialtoneChannel.class;
         } else {
             return clazz;
@@ -138,7 +141,6 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
     @ModifyArg(method = {"connect", "connectToServer"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;"), require = 0)
     private static EventLoopGroup hijackGroup(EventLoopGroup group) {
         if (e4mc$smuggledDialtoneAddress.get() != null) {
-            e4mc$originalGroup.set(group);
             return DialtoneAmbientSession.INSTANCE.group;
         } else {
             return group;
@@ -151,7 +153,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         if (dialtoneAddress != null) {
             var ret = instance.connect(dialtoneAddress);
             e4mc$smuggledDialtoneAddress.remove();
-            return e4all$withRelayFallback(instance, ret, () -> operation.call(instance, inetHost, inetPort));
+            return ret;
         } else {
             return operation.call(instance, inetHost, inetPort);
         }
@@ -163,86 +165,20 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
         if (dialtoneAddress != null) {
             var ret = instance.connect(dialtoneAddress);
             e4mc$smuggledDialtoneAddress.remove();
-            return e4all$withRelayFallback(instance, ret, () -> operation.call(instance, remoteAddress));
+            return ret;
         } else {
             return operation.call(instance, remoteAddress);
         }
     }
 
-    // a failed or hung direct dial must not kill the join, use the relay instead
-    @Unique
-    private static ChannelFuture e4all$withRelayFallback(Bootstrap instance, ChannelFuture directFuture, java.util.function.Supplier<ChannelFuture> fallbackConnect) {
-        Class<?> originalChannelClass = e4mc$originalChannelClass.get();
-        EventLoopGroup originalGroup = e4mc$originalGroup.get();
-        e4mc$originalChannelClass.remove();
-        e4mc$originalGroup.remove();
-        if (originalChannelClass == null || originalGroup == null) {
-            return directFuture;
-        }
-        EventLoop eventLoop = directFuture.channel().eventLoop();
-        DefaultChannelPromise result = new DefaultChannelPromise(directFuture.channel(), eventLoop);
-        java.util.concurrent.atomic.AtomicBoolean fallbackStarted = new java.util.concurrent.atomic.AtomicBoolean(false);
-        Runnable startFallback = () -> {
-            if (!fallbackStarted.compareAndSet(false, true)) {
-                return;
-            }
-            try {
-                instance.channel((Class) originalChannelClass).group(originalGroup);
-            } catch (Throwable t) {
-                E4allClient.LOGGER.warn("e4all: could not prepare the relay fallback connect", t);
-                Throwable cause = directFuture.cause() != null ? directFuture.cause() : new IllegalStateException("direct connection failed");
-                result.setFailure(cause);
-                return;
-            }
-            ChannelFuture fallback = fallbackConnect.get();
-            fallback.addListener(f -> {
-                if (f.isSuccess()) {
-                    E4allClient.LOGGER.info("e4all: direct connection failed, joining through the relay instead");
-                    result.setSuccess();
-                } else {
-                    E4allClient.LOGGER.warn("e4all: relay fallback also failed", f.cause());
-                    result.setFailure(f.cause());
-                }
-            });
-        };
-        // a hung iroh dial (unreachable relay, dead path) must not stall the join forever
-        long fallbackTimeoutMs = 15_000L;
-        java.util.concurrent.ScheduledFuture<?> timeout = eventLoop.schedule(() -> {
-            if (directFuture.isDone() || result.isDone()) {
-                return;
-            }
-            E4allClient.LOGGER.warn("e4all: direct connection did not complete within {} ms, falling back to the relay", fallbackTimeoutMs);
-            try {
-                directFuture.cancel(false);
-            } catch (Throwable ignored) {}
-            startFallback.run();
-        }, fallbackTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-        directFuture.addListener(f -> {
-            try {
-                if (!timeout.isDone()) timeout.cancel(false);
-            } catch (Throwable ignored) {}
-            if (f.isSuccess()) {
-                result.setSuccess();
-            } else {
-                E4allClient.LOGGER.warn("e4all: direct connection failed ({}), falling back to the relay", String.valueOf(f.cause()));
-                startFallback.run();
-            }
-        });
-        return result;
-    }
-
     @Inject(method = {"connect", "connectToServer"}, at = @At("RETURN"), require = 0)
     private static void e4all$cleanupSmuggledAddress(CallbackInfoReturnable<?> cir) {
         e4mc$smuggledDialtoneAddress.remove();
-        e4mc$originalChannelClass.remove();
-        e4mc$originalGroup.remove();
     }
 
     @Surrogate
     private static void e4all$cleanupSmuggledAddress(CallbackInfo ci) {
         e4mc$smuggledDialtoneAddress.remove();
-        e4mc$originalChannelClass.remove();
-        e4mc$originalGroup.remove();
     }
 
     @Inject(method = "setEncryptionKey", at = @At(value = "FIELD", target = "Lnet/minecraft/network/Connection;channel:Lio/netty/channel/Channel;", opcode = org.objectweb.asm.Opcodes.GETFIELD, ordinal = 0), cancellable = true, require = 0)

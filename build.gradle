@@ -154,6 +154,10 @@ allprojects {
     java {
         withSourcesJar()
     }
+
+    tasks.named("sourcesJar") {
+        exclude "assets/e4all/natives/**"
+    }
 }
 
 ext.getLatestChangelog = {

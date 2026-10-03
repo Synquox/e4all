@@ -64,11 +64,6 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
     }
 
     private void onPlayerConnected(PlayerConnectedEvent event) {
-        // When a player connects to SVC, check if they lack e4all.
-        // The voice control channel requires e4all on both sides.
-        // If the player has e4all, they will send HELLO via the control channel.
-        // If they DON'T have e4all, no HELLO arrives. We use a timeout to detect
-        // this and inform the host. For now, just log the connection.
         E4allClient.LOGGER.info("e4all voice: player connected to SVC voice: {}",
                 event.getConnection().getPlayer().getUuid());
     }
@@ -90,7 +85,6 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
         E4allClient.LOGGER.info("e4all voice: e4all host detected, negotiating voice via control channel");
     }
 
-    // true when joined to an e4all host and not hosting locally
     private static boolean shouldNegotiateVoice() {
         try {
             if (!link.e4all.Config.INSTANCE.voiceP2PEnabled.value()) {
@@ -98,7 +92,6 @@ public final class E4allVoicechatPlugin implements VoicechatPlugin {
             }
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             if (mc.hasSingleplayerServer()) {
-                // We are hosting; SVC client talks to our own SVC server via UDP.
                 return false;
             }
             if (VoiceBridge.hasPendingDialtoneTicket()) {

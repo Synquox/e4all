@@ -9,6 +9,8 @@ import java.util.Set;
 public class E4allMixinPlugin implements IMixinConfigPlugin {
     private static final boolean HAS_SIGNATURES;
     private static final boolean HAS_COMMON_LISTENER_COOKIE;
+    private static final boolean HAS_CHAT_SESSION_UPDATE_PACKET;
+    private static final boolean HAS_CHAT_SENDER;
     private static final boolean HAS_MULTIPLAYER_OPTIONS_SCREEN;
     private static final boolean HAS_SHARE_TO_LAN_SCREEN;
     private static final boolean HAS_WORLD_OPTIONS_SCREEN;
@@ -16,6 +18,7 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
     private static final boolean HAS_MODERN_PAYLOADS;
     // 1.21.2+ payload dispatch codec
     private static final boolean HAS_MODERN_PAYLOAD_CODEC_TARGETS;
+    private static final int MC_GENERATION = detectMinecraftGeneration();
     static {
         boolean hasSignatures = false;
         try {
@@ -36,6 +39,19 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         } catch (Throwable ignored) {
         }
         HAS_COMMON_LISTENER_COOKIE = hasCookie;
+
+        boolean hasChatSessionUpdate = false;
+        boolean hasChatSender = false;
+        try {
+            ClassLoader cl = E4allMixinPlugin.class.getClassLoader();
+            hasChatSessionUpdate =
+                    cl.getResource("net/minecraft/network/protocol/game/ServerboundChatSessionUpdatePacket.class") != null
+                    || cl.getResource("net/minecraft/class_7861.class") != null;
+            hasChatSender = cl.getResource("net/minecraft/network/chat/ChatSender.class") != null;
+        } catch (Throwable ignored) {
+        }
+        HAS_CHAT_SESSION_UPDATE_PACKET = hasChatSessionUpdate;
+        HAS_CHAT_SENDER = hasChatSender;
 
         ClassLoader cl = E4allMixinPlugin.class.getClassLoader();
         HAS_MULTIPLAYER_OPTIONS_SCREEN =
@@ -66,6 +82,28 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         HAS_MODERN_PAYLOAD_CODEC_TARGETS = hasPayloadCodecTargets;
     }
 
+    private static int detectMinecraftGeneration() {
+        try {
+            Class<?> loaderClass = Class.forName("net.fabricmc.loader.api.FabricLoader");
+            Object loader = loaderClass.getMethod("getInstance").invoke(null);
+            Object container = loaderClass.getMethod("getModContainer", String.class).invoke(loader, "minecraft");
+            Object present = container.getClass().getMethod("orElse", Object.class).invoke(container, (Object) null);
+            if (present == null) {
+                return -1;
+            }
+            Object metadata = present.getClass().getMethod("getMetadata").invoke(present);
+            Object version = metadata.getClass().getMethod("getVersion").invoke(metadata);
+            String id = (String) version.getClass().getMethod("getId").invoke(version);
+            String[] parts = id.split("[.+\\-]");
+            if (parts.length < 2 || !"1".equals(parts[0])) {
+                return 99;
+            }
+            return Integer.parseInt(parts[1]);
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
     @Override
     public void onLoad(String mixinPackage) {}
 
@@ -84,6 +122,18 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         }
 
         if (mixinClassName.contains(".ncr.")) {
+            if (mixinClassName.endsWith("MixinServerboundChatSessionUpdatePacket")) {
+                if (MC_GENERATION < 0) {
+                    return HAS_CHAT_SESSION_UPDATE_PACKET;
+                }
+                return HAS_CHAT_SESSION_UPDATE_PACKET && MC_GENERATION >= 21;
+            }
+            if (mixinClassName.endsWith("MixinPlayerListLegacy")) {
+                return true;
+            }
+            if (mixinClassName.endsWith("MixinPlayerList")) {
+                return HAS_SIGNATURES && !HAS_CHAT_SENDER;
+            }
             return HAS_SIGNATURES;
         }
 
@@ -106,11 +156,16 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
                 || mixinClassName.endsWith("DiscardedPayloadMixin")
                 || mixinClassName.endsWith("ServerboundCustomPayloadPacketMixin")
                 || mixinClassName.endsWith("ServerCommonPacketListenerImplMixin")
+                || mixinClassName.endsWith("ServerCommonPacketListenerImplAccessor")
                 || mixinClassName.endsWith("ClientCommonPacketListenerImplMixin")) {
             return HAS_MODERN_PAYLOADS;
         }
 
         return true;
+    }
+
+    public static boolean hasModernPayloads() {
+        return HAS_MODERN_PAYLOADS;
     }
 
     @Override

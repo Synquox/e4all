@@ -1,6 +1,7 @@
 package link.e4all.voice;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import link.e4all.E4allClient;
 import link.e4all.RawPayload;
 import link.e4all.ResourceLocReflector;
@@ -90,8 +91,8 @@ public final class VoiceControlPayload {
                 return "VoiceControlPayload[" + (channel != null ? channel : "voice") + "]";
             }
             if (m.getDeclaringClass() == RawPayload.class) {
-                if ("e4all$data".equals(m.getName())) return finalData;
-                if ("e4all$channel".equals(m.getName())) return channel;
+                if ("data".equals(m.getName())) return finalData;
+                if ("channel".equals(m.getName())) return channel;
                 return null;
             }
 
@@ -130,13 +131,15 @@ public final class VoiceControlPayload {
     public static void registerFabric() {
         try {
             ClassLoader cl = VoiceControlPayload.class.getClassLoader();
+
+            registerUntypedFabricReceiver(cl);
+
             Class<?> payloadIf = getPayloadInterface();
             if (payloadIf == null) return;
             Class<?> typeCls = getTypeClass(payloadIf);
             if (typeCls == null) return;
 
             Class<?> encIf = findClass(cl, "net.minecraft.network.codec.StreamMemberEncoder", "net.minecraft.class_9142");
-            // 1.21.1 uses ValueFirstEncoder here, older versions StreamMemberEncoder
             Class<?> vfeIf = findClass(cl, "net.minecraft.network.codec.ValueFirstEncoder", "net.minecraft.class_9143");
             Class<?> decIf = findClass(cl, "net.minecraft.network.codec.StreamDecoder", "net.minecraft.class_9141");
             Class<?> codecIf = findClass(cl, "net.minecraft.network.codec.StreamCodec", "net.minecraft.class_9139");
@@ -194,7 +197,7 @@ public final class VoiceControlPayload {
                 byte[] data = null;
                 FriendlyByteBuf buf = null;
                 for (Object arg : a) {
-                    if (arg instanceof RawPayload raw) data = raw.e4all$data();
+                    if (arg instanceof RawPayload raw) data = raw.data();
                     else if (arg instanceof FriendlyByteBuf b) buf = b;
                 }
                 if (data != null && buf != null && data.length > 0) {
@@ -273,7 +276,7 @@ public final class VoiceControlPayload {
                                         Object contextArg = args[1];
                                         byte[] data = null;
                                         if (payloadArg instanceof RawPayload raw) {
-                                            data = raw.e4all$data();
+                                            data = raw.data();
                                         } else {
                                             data = extractDataFromPayload(payloadArg);
                                         }
@@ -301,6 +304,42 @@ public final class VoiceControlPayload {
             E4allClient.LOGGER.debug("e4all voice: ServerPlayNetworking receiver registration skipped/failed", t);
         }
 
+        registerFabricClientReceiver(cl, type, typeCls);
+    }
+
+    private static void registerUntypedFabricReceiver(ClassLoader cl) {
+        try {
+            Class<?> spNetCls = findClass(cl, "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking");
+            if (spNetCls == null) return;
+            Object id = channel();
+            if (id == null) return;
+            for (Method m : spNetCls.getMethods()) {
+                if (!"registerGlobalReceiver".equals(m.getName()) || m.getParameterCount() != 2) continue;
+                Class<?>[] p = m.getParameterTypes();
+                if (!isResourceLoc(p[0]) || !p[1].isInterface()) continue;
+
+                Object handler = Proxy.newProxyInstance(cl, new Class<?>[]{p[1]}, (proxy, method, args) -> {
+                    try {
+                        if ("receive".equals(method.getName()) && args != null && args.length == 5
+                                && args[1] instanceof ServerPlayer sp
+                                && args[3] instanceof FriendlyByteBuf buf) {
+                            VoiceControl.handleServerPayloadDirect(sp, readRemaining(buf));
+                        }
+                    } catch (Throwable t) {
+                        E4allClient.LOGGER.error("e4all voice: error in untyped ServerPlayNetworking receiver", t);
+                    }
+                    return null;
+                });
+                m.invoke(null, id, handler);
+                E4allClient.LOGGER.info("e4all voice: registered untyped ServerPlayNetworking receiver (1.19 - 1.20.4 API)");
+                return;
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all voice: untyped ServerPlayNetworking receiver registration skipped/failed", t);
+        }
+    }
+
+    private static void registerFabricClientReceiver(ClassLoader cl, Object type, Class<?> typeCls) {
         // Register client receiver
         try {
             Class<?> cpNetCls = findClass(cl, "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking");
@@ -316,7 +355,7 @@ public final class VoiceControlPayload {
                                         Object payloadArg = args[0];
                                         byte[] data = null;
                                         if (payloadArg instanceof RawPayload raw) {
-                                            data = raw.e4all$data();
+                                            data = raw.data();
                                         } else {
                                             data = extractDataFromPayload(payloadArg);
                                         }
@@ -343,42 +382,28 @@ public final class VoiceControlPayload {
 
     public static ServerPlayer extractPlayerFromContext(Object contextArg) {
         if (contextArg == null) return null;
-        // check public interfaces first to avoid IllegalAccessException on package-private impls
-        for (Class<?> iface : contextArg.getClass().getInterfaces()) {
-            if (Modifier.isPublic(iface.getModifiers())) {
-                for (Method m : iface.getMethods()) {
-                    if (m.getParameterCount() == 0 && ServerPlayer.class.isAssignableFrom(m.getReturnType())) {
-                        try {
-                            return (ServerPlayer) m.invoke(contextArg);
-                        } catch (Throwable ignored) {}
-                    }
+        if (contextArg instanceof ServerPlayer sp) return sp;
+        Class<?> cls = contextArg.getClass();
+        for (String mName : new String[]{"player", "getPlayer", "method_56447"}) {
+            try {
+                Method m = cls.getMethod(mName);
+                if (m.getParameterCount() == 0) {
+                    m.setAccessible(true);
+                    Object res = m.invoke(contextArg);
+                    if (res instanceof ServerPlayer sp) return sp;
                 }
-            }
+            } catch (Throwable ignored) {}
         }
-        Class<?> sc = contextArg.getClass().getSuperclass();
-        while (sc != null && sc != Object.class) {
-            for (Class<?> iface : sc.getInterfaces()) {
-                if (Modifier.isPublic(iface.getModifiers())) {
-                    for (Method m : iface.getMethods()) {
-                        if (m.getParameterCount() == 0 && ServerPlayer.class.isAssignableFrom(m.getReturnType())) {
-                            try {
-                                return (ServerPlayer) m.invoke(contextArg);
-                            } catch (Throwable ignored) {}
-                        }
-                    }
-                }
-            }
-            sc = sc.getSuperclass();
-        }
-        for (Method m : contextArg.getClass().getMethods()) {
+        for (Method m : cls.getMethods()) {
             if (m.getParameterCount() == 0 && ServerPlayer.class.isAssignableFrom(m.getReturnType())) {
                 try {
                     m.setAccessible(true);
-                    return (ServerPlayer) m.invoke(contextArg);
+                    Object res = m.invoke(contextArg);
+                    if (res instanceof ServerPlayer sp) return sp;
                 } catch (Throwable ignored) {}
             }
         }
-        Class<?> c = contextArg.getClass();
+        Class<?> c = cls;
         while (c != null && c != Object.class) {
             for (Field f : c.getDeclaredFields()) {
                 if (ServerPlayer.class.isAssignableFrom(f.getType())) {
@@ -391,20 +416,6 @@ public final class VoiceControlPayload {
             }
             c = c.getSuperclass();
         }
-        try {
-            for (Method m : contextArg.getClass().getMethods()) {
-                if (m.getParameterCount() == 0) {
-                    try {
-                        m.setAccessible(true);
-                        Object res = m.invoke(contextArg);
-                        if (res != null) {
-                            ServerPlayer sp = VoiceControl.extractServerPlayer(res);
-                            if (sp != null) return sp;
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            }
-        } catch (Throwable ignored) {}
         return null;
     }
 
@@ -412,44 +423,87 @@ public final class VoiceControlPayload {
         try {
             Class<?> snCls = findClass(VoiceControlPayload.class.getClassLoader(),
                     "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking");
-            if (snCls == null) return false;
-            Object payload = createPayload(data);
-            if (payload == null) return false;
-
-            for (Method m : snCls.getMethods()) {
-                if ("send".equals(m.getName()) && m.getParameterCount() == 2) {
-                    Class<?>[] p = m.getParameterTypes();
-                    if (p[0].isAssignableFrom(player.getClass()) && (p[1].isInstance(payload) || p[1].isAssignableFrom(payload.getClass()))) {
-                        m.invoke(null, player, payload);
-                        return true;
+            if (snCls != null) {
+                Object payload = createPayload(data);
+                if (payload != null) {
+                    for (Method m : snCls.getMethods()) {
+                        if ("send".equals(m.getName()) && m.getParameterCount() == 2) {
+                            Class<?>[] p = m.getParameterTypes();
+                            if (p[0].isAssignableFrom(player.getClass()) && (p[1].isInstance(payload) || p[1].isAssignableFrom(payload.getClass()))) {
+                                m.invoke(null, player, payload);
+                                return true;
+                            }
+                        }
                     }
                 }
             }
         } catch (Throwable t) {
             E4allClient.LOGGER.debug("e4all: ServerPlayNetworking.send failed", t);
         }
-        return false;
+        return sendClientboundUntyped(player, data);
     }
 
     public static boolean sendServerboundFabric(byte[] data) {
         try {
             Class<?> cnCls = findClass(VoiceControlPayload.class.getClassLoader(),
                     "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking");
-            if (cnCls == null) return false;
-            Object payload = createPayload(data);
-            if (payload == null) return false;
-
-            for (Method m : cnCls.getMethods()) {
-                if ("send".equals(m.getName()) && m.getParameterCount() == 1) {
-                    Class<?>[] p = m.getParameterTypes();
-                    if (p[0].isInstance(payload) || p[0].isAssignableFrom(payload.getClass())) {
-                        m.invoke(null, payload);
-                        return true;
+            if (cnCls != null) {
+                Object payload = createPayload(data);
+                if (payload != null) {
+                    for (Method m : cnCls.getMethods()) {
+                        if ("send".equals(m.getName()) && m.getParameterCount() == 1) {
+                            Class<?>[] p = m.getParameterTypes();
+                            if (p[0].isInstance(payload) || p[0].isAssignableFrom(payload.getClass())) {
+                                m.invoke(null, payload);
+                                return true;
+                            }
+                        }
                     }
                 }
             }
         } catch (Throwable t) {
             E4allClient.LOGGER.debug("e4all: ClientPlayNetworking.send failed", t);
+        }
+        return sendServerboundUntyped(data);
+    }
+
+    private static boolean sendServerboundUntyped(byte[] data) {
+        try {
+            Class<?> cnCls = findClass(VoiceControlPayload.class.getClassLoader(),
+                    "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking");
+            if (cnCls == null) return false;
+            Object id = channel();
+            if (id == null) return false;
+            for (Method m : cnCls.getMethods()) {
+                if (!"send".equals(m.getName()) || m.getParameterCount() != 2) continue;
+                Class<?>[] p = m.getParameterTypes();
+                if (!isResourceLoc(p[0]) || !p[1].isAssignableFrom(FriendlyByteBuf.class)) continue;
+                m.invoke(null, id, new FriendlyByteBuf(Unpooled.wrappedBuffer(data)));
+                return true;
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: untyped ClientPlayNetworking.send failed", t);
+        }
+        return false;
+    }
+
+    private static boolean sendClientboundUntyped(ServerPlayer player, byte[] data) {
+        try {
+            Class<?> snCls = findClass(VoiceControlPayload.class.getClassLoader(),
+                    "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking");
+            if (snCls == null) return false;
+            Object id = channel();
+            if (id == null) return false;
+            for (Method m : snCls.getMethods()) {
+                if (!"send".equals(m.getName()) || m.getParameterCount() != 3) continue;
+                Class<?>[] p = m.getParameterTypes();
+                if (!p[0].isAssignableFrom(player.getClass()) || !isResourceLoc(p[1])) continue;
+                if (!p[2].isAssignableFrom(FriendlyByteBuf.class)) continue;
+                m.invoke(null, player, id, new FriendlyByteBuf(Unpooled.wrappedBuffer(data)));
+                return true;
+            }
+        } catch (Throwable t) {
+            E4allClient.LOGGER.debug("e4all: untyped ServerPlayNetworking.send failed", t);
         }
         return false;
     }
@@ -483,6 +537,11 @@ public final class VoiceControlPayload {
             } catch (ClassNotFoundException ignored) {}
         }
         return null;
+    }
+
+    private static boolean isResourceLoc(Class<?> candidate) {
+        if (candidate == null) return false;
+        return ResourceLocReflector.isAssignableFrom(candidate);
     }
 
     public static boolean isOwnChannel(Object id) {
@@ -540,7 +599,7 @@ public final class VoiceControlPayload {
     public static Object extractChannelFromPayload(Object payload) {
         if (payload == null) return null;
         if (payload instanceof RawPayload raw) {
-            Object ch = raw.e4all$channel();
+            Object ch = raw.channel();
             if (ch != null) return ch;
         }
         Class<?> cls = payload.getClass();
@@ -621,7 +680,7 @@ public final class VoiceControlPayload {
     public static boolean isOwnPacket(Object packet, Object payload) {
         if (payload != null) {
             if (payload instanceof RawPayload raw) {
-                Object ch = raw.e4all$channel();
+                Object ch = raw.channel();
                 return ch == null || isOwnChannel(ch);
             }
             Object ch = extractChannelFromPayload(payload);
@@ -711,55 +770,44 @@ public final class VoiceControlPayload {
     public static byte[] extractDataFromPayload(Object payload) {
         if (payload == null) return null;
         if (payload instanceof RawPayload raw) {
-            Object ch = raw.e4all$channel();
+            Object ch = raw.channel();
             if (ch == null || isOwnChannel(ch)) {
-                return raw.e4all$data();
+                return raw.data();
             }
         }
+        Object ch = extractChannelFromPayload(payload);
+        if (ch == null || !isOwnChannel(ch)) return null;
+
         Class<?> cls = payload.getClass();
-        boolean isVoice = false;
         for (Method m : cls.getMethods()) {
             if (m.getParameterCount() == 0) {
-                try {
-                    Object ret = m.invoke(payload);
-                    if (ret != null && (isOwnChannel(ret) || (registeredType != null && registeredType.equals(ret)))) {
-                        isVoice = true;
-                        break;
-                    }
-                } catch (Throwable ignored) {}
-            }
-        }
-        if (isVoice) {
-            for (Method m : cls.getMethods()) {
-                if (m.getParameterCount() == 0) {
-                    if (m.getReturnType() == byte[].class) {
-                        try {
-                            return (byte[]) m.invoke(payload);
-                        } catch (Throwable ignored) {}
-                    } else if (ByteBuf.class.isAssignableFrom(m.getReturnType()) || FriendlyByteBuf.class.isAssignableFrom(m.getReturnType())) {
-                        try {
-                            ByteBuf b = (ByteBuf) m.invoke(payload);
-                            if (b != null) {
-                                byte[] d = new byte[b.readableBytes()];
-                                b.getBytes(b.readerIndex(), d);
-                                return d;
-                            }
-                        } catch (Throwable ignored) {}
-                    }
+                if (m.getReturnType() == byte[].class) {
+                    try {
+                        return (byte[]) m.invoke(payload);
+                    } catch (Throwable ignored) {}
+                } else if (ByteBuf.class.isAssignableFrom(m.getReturnType())) {
+                    try {
+                        ByteBuf b = (ByteBuf) m.invoke(payload);
+                        if (b != null) {
+                            byte[] d = new byte[b.readableBytes()];
+                            b.getBytes(b.readerIndex(), d);
+                            return d;
+                        }
+                    } catch (Throwable ignored) {}
                 }
             }
-            for (Field f : cls.getDeclaredFields()) {
-                try {
-                    f.setAccessible(true);
-                    Object val = f.get(payload);
-                    if (val instanceof byte[] b) return b;
-                    if (val instanceof ByteBuf b) {
-                        byte[] d = new byte[b.readableBytes()];
-                        b.getBytes(b.readerIndex(), d);
-                        return d;
-                    }
-                } catch (Throwable ignored) {}
-            }
+        }
+        for (Field f : cls.getDeclaredFields()) {
+            try {
+                f.setAccessible(true);
+                Object val = f.get(payload);
+                if (val instanceof byte[] b) return b;
+                if (val instanceof ByteBuf b) {
+                    byte[] d = new byte[b.readableBytes()];
+                    b.getBytes(b.readerIndex(), d);
+                    return d;
+                }
+            } catch (Throwable ignored) {}
         }
         return null;
     }

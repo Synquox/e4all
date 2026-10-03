@@ -39,7 +39,6 @@ public abstract class WorldOptionsScreenMixin extends Screen {
                     .build();
 
             linearLayout.addChild(button);
-            E4allClient.LOGGER.warn("[e4all] Added Online Mode toggle button to WorldOptionsScreen LinearLayout");
         } catch (Throwable t) {
             E4allClient.LOGGER.warn("[e4all] Failed to add Online Mode button to WorldOptionsScreen", t);
         }

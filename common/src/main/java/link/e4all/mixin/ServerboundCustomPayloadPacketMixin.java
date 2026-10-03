@@ -3,13 +3,15 @@ package link.e4all.mixin;
 import link.e4all.voice.VoiceControlPayload;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 // same capture as the clientbound side, but the player context only exists at
 // handleCustomPayload time, so stash for the listener mixin (same netty thread)
@@ -26,7 +28,8 @@ public class ServerboundCustomPayloadPacketMixin {
 
     @Inject(method = "readPayload",
             at = @At("HEAD"), require = 0)
-    private static void e4all$captureVoicePayload(@Coerce Object id, FriendlyByteBuf buf) {
+    private static void e4all$captureVoicePayload(ResourceLocation id, FriendlyByteBuf buf,
+                                                  CallbackInfoReturnable<CustomPacketPayload> cir) {
         try {
             if (!VoiceControlPayload.isOwnChannel(id)) return;
             byte[] data = VoiceControlPayload.readRemaining(new FriendlyByteBuf(buf.slice()));

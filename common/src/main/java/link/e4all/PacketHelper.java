@@ -133,56 +133,6 @@ public final class PacketHelper {
         return null;
     }
 
-    private static final String[] REGISTRY_BYTE_BUF_CLASS_NAMES = {
-            "net.minecraft.network.RegistryFriendlyByteBuf",
-            "net.minecraft.network.packet.RegistryFriendlyByteBuf",
-            "net.minecraft.class_9129"
-    };
-
-    private static final String[] REGISTRY_ACCESS_CLASS_NAMES = {
-            "net.minecraft.core.RegistryAccess",
-            "net.minecraft.class_5455"
-    };
-
-    private static Object createTestByteBuf(ByteBuf rawBuf) {
-        Class<?> regCls = findClass(REGISTRY_BYTE_BUF_CLASS_NAMES);
-        if (regCls != null) {
-            Object regAccess = null;
-            Class<?> regAccessCls = findClass(REGISTRY_ACCESS_CLASS_NAMES);
-            if (regAccessCls != null) {
-                try {
-                    java.lang.reflect.Field f = regAccessCls.getDeclaredField("EMPTY");
-                    f.setAccessible(true);
-                    regAccess = f.get(null);
-                } catch (Throwable ignored) {}
-                if (regAccess == null) {
-                    try {
-                        java.lang.reflect.Field f = regAccessCls.getDeclaredField("field_25114");
-                        f.setAccessible(true);
-                        regAccess = f.get(null);
-                    } catch (Throwable ignored) {}
-                }
-            }
-
-            for (Constructor<?> ctor : regCls.getDeclaredConstructors()) {
-                try {
-                    ctor.setAccessible(true);
-                    Class<?>[] p = ctor.getParameterTypes();
-                    if (p.length == 2 && ByteBuf.class.isAssignableFrom(p[0])) {
-                        if (regAccess != null && p[1].isAssignableFrom(regAccess.getClass())) {
-                            return ctor.newInstance(rawBuf, regAccess);
-                        } else {
-                            return ctor.newInstance(rawBuf, null);
-                        }
-                    } else if (p.length == 1 && ByteBuf.class.isAssignableFrom(p[0])) {
-                        return ctor.newInstance(rawBuf);
-                    }
-                } catch (Throwable ignored) {}
-            }
-        }
-        return new FriendlyByteBuf(rawBuf);
-    }
-
     public static Object createCustomPayloadType(Object channel) {
         if (channel == null) return null;
         if (VoiceControlPayload.isOwnChannel(channel)) {
@@ -223,138 +173,6 @@ public final class PacketHelper {
         return null;
     }
 
-    public static Packet<?> createPacketFromPayload(boolean clientbound, Object payload) {
-        if (payload == null) return null;
-        String[] pktNames = clientbound ? CLIENTBOUND_PACKET_CLASS_NAMES : SERVERBOUND_PACKET_CLASS_NAMES;
-        Class<?> pktCls = findClass(pktNames);
-        if (pktCls == null) return null;
-
-        for (Constructor<?> ctor : pktCls.getDeclaredConstructors()) {
-            try {
-                ctor.setAccessible(true);
-                Class<?>[] p = ctor.getParameterTypes();
-                if (p.length == 1 && p[0].isAssignableFrom(payload.getClass())) {
-                    return (Packet<?>) ctor.newInstance(payload);
-                }
-            } catch (Throwable ignored) {}
-        }
-        Class<?> plaCls = findClass(PAYLOAD_INTERFACE_NAMES);
-        if (plaCls != null) {
-            try {
-                Constructor<?> ctor = pktCls.getDeclaredConstructor(plaCls);
-                ctor.setAccessible(true);
-                return (Packet<?>) ctor.newInstance(payload);
-            } catch (Throwable ignored) {}
-        }
-        return null;
-    }
-
-    private static final ThreadLocal<Throwable> LAST_TEST_FAILURE = new ThreadLocal<>();
-
-    public static Throwable lastTestFailure() {
-        return LAST_TEST_FAILURE.get();
-    }
-
-    private static boolean testFailed(Throwable cause) {
-        LAST_TEST_FAILURE.set(cause);
-        return false;
-    }
-
-    public static boolean testEncode(Packet<?> pkt) {
-        LAST_TEST_FAILURE.remove();
-        if (pkt == null) return false;
-        ByteBuf rawBuf = Unpooled.buffer();
-        boolean tested = false;
-        try {
-            Object testBuf = createTestByteBuf(rawBuf);
-            if (testBuf == null) {
-                testBuf = new FriendlyByteBuf(rawBuf);
-            }
-
-            Class<?> cls = pkt.getClass();
-
-            // try static streamcodec on packet
-            for (java.lang.reflect.Field f : cls.getDeclaredFields()) {
-                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
-                    try {
-                        f.setAccessible(true);
-                        Object codecObj = f.get(null);
-                        if (codecObj != null) {
-                            for (Method cm : codecObj.getClass().getMethods()) {
-                                if (cm.getParameterCount() == 2 && cm.getName().equals("encode")) {
-                                    try {
-                                        cm.setAccessible(true);
-                                        cm.invoke(codecObj, testBuf, pkt);
-                                        tested = true;
-                                        return true;
-                                    } catch (java.lang.reflect.InvocationTargetException ite) {
-                                        LOGGER.debug("e4all: static codec testEncode failed: {}", ite.getCause());
-                                        return testFailed(ite.getCause());
-                                    } catch (Throwable ignored) {}
-                                }
-                            }
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            }
-
-            // try packet type codec
-            for (Method m : cls.getMethods()) {
-                if (m.getParameterCount() == 0 && m.getReturnType() != void.class && m.getReturnType() != String.class) {
-                    try {
-                        Object packetType = m.invoke(pkt);
-                        if (packetType != null && packetType != pkt) {
-                            for (Method tm : packetType.getClass().getMethods()) {
-                                if (tm.getParameterCount() == 0 && tm.getReturnType() != void.class) {
-                                    Object codec = tm.invoke(packetType);
-                                    if (codec != null && codec != packetType) {
-                                        for (Method cm : codec.getClass().getMethods()) {
-                                            if (cm.getParameterCount() == 2) {
-                                                try {
-                                                    cm.setAccessible(true);
-                                                    cm.invoke(codec, testBuf, pkt);
-                                                    tested = true;
-                                                    return true;
-                                                } catch (java.lang.reflect.InvocationTargetException ite) {
-                                                    LOGGER.debug("e4all: packetType codec testEncode failed: {}", ite.getCause());
-                                                    return testFailed(ite.getCause());
-                                                } catch (Throwable ignored) {}
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            }
-
-            // try legacy write method
-            for (Method m : cls.getMethods()) {
-                if (m.getParameterCount() == 1) {
-                    try {
-                        m.setAccessible(true);
-                        m.invoke(pkt, testBuf);
-                        tested = true;
-                        return true;
-                    } catch (java.lang.reflect.InvocationTargetException ite) {
-                        LOGGER.debug("e4all: legacy write testEncode failed: {}", ite.getCause());
-                        return testFailed(ite.getCause());
-                    } catch (Throwable ignored) {}
-                }
-            }
-
-            if (findClass(PAYLOAD_INTERFACE_NAMES) != null || findClass(DISCARDED_PAYLOAD_CLASS_NAMES) != null) {
-                if (tested) return true;
-                return testFailed(new IllegalStateException("no encoder found for " + cls.getName()));
-            }
-
-            return true;
-        } finally {
-            rawBuf.release();
-        }
-    }
-
     public static void sendClientbound(ServerPlayer player, Object channel, byte[] data) {
         try {
             Packet<?> pkt = makePacket(true, channel, data);
@@ -364,19 +182,6 @@ public final class PacketHelper {
                 }
                 return;
             }
-            if (!testEncode(pkt)) {
-                Throwable why = lastTestFailure();
-                if (VoiceControlPayload.isOwnChannel(channel)) {
-                    // don't send malformed payloads that failed encoding
-                    LOGGER.warn("e4all: payload {} failed the codec test, dropping it instead of "
-                            + "risking a desynced stream", channel, why);
-                } else {
-                    LOGGER.debug("e4all: payload {} cannot be encoded by server packet codec; skipping", channel);
-                }
-                return;
-            }
-            Packet<?> fresh = makePacket(true, channel, data);
-            if (fresh != null) pkt = fresh;
             if (!sendPacket(connectionOf(player), pkt)) {
                 LOGGER.warn("e4all: could not deliver clientbound payload {} to {}", channel, player.getScoreboardName());
             }
@@ -394,18 +199,6 @@ public final class PacketHelper {
                 }
                 return;
             }
-            if (!testEncode(pkt)) {
-                Throwable why = lastTestFailure();
-                if (VoiceControlPayload.isOwnChannel(channel)) {
-                    LOGGER.warn("e4all: payload {} failed the codec test, dropping it instead of "
-                            + "risking a desynced stream", channel, why);
-                } else {
-                    LOGGER.debug("e4all: payload {} cannot be encoded by client packet codec; skipping", channel);
-                }
-                return;
-            }
-            Packet<?> fresh = makePacket(false, channel, data);
-            if (fresh != null) pkt = fresh;
             sendPacket(connection, pkt);
         } catch (Throwable t) {
             LOGGER.warn("e4all: failed to send serverbound payload {}", channel, t);
@@ -623,7 +416,7 @@ public final class PacketHelper {
 
         InvocationHandler handler = (proxy, method, args) -> {
             if (method.getDeclaringClass() == RawPayload.class) {
-                if (method.getName().equals("e4all$data")) return finalData;
+                if (method.getName().equals("data")) return finalData;
                 return finalChannel;
             }
 

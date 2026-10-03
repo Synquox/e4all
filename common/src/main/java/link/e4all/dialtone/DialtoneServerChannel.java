@@ -77,8 +77,8 @@ public class DialtoneServerChannel extends AbstractServerChannel {
         try {
             relayMap = QuiclimeSession.getRelayMap();
         } catch (Throwable t) {
-            E4allClient.LOGGER.warn("e4all: failed to fetch relay map, using empty", t);
-            relayMap = new String[0];
+            E4allClient.LOGGER.warn("e4all: failed to fetch relay map, using default relay list", t);
+            relayMap = QuiclimeSession.getDefaultRelayMap();
         }
         if (voiceMode) {
             this.endpoint = new Endpoint(new byte[][]{DialtoneAddress.VOICE_ALPN.getBytes(StandardCharsets.UTF_8)}, relayMap);
@@ -109,7 +109,7 @@ public class DialtoneServerChannel extends AbstractServerChannel {
         pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                e4all$reportEndpointError(cause);
+                reportEndpointError(cause);
             }
         });
         endpoint.watchAddress(new Resolvable<>() {
@@ -223,7 +223,7 @@ public class DialtoneServerChannel extends AbstractServerChannel {
         return !closed && endpoint != null;
     }
 
-    private void e4all$reportEndpointError(Throwable cause) {
+    private void reportEndpointError(Throwable cause) {
         E4allClient.LOGGER.warn("e4all {}: dialtone endpoint error: {}",
                 voiceMode ? "voice" : "game", cause == null ? "unknown" : cause.toString());
         try {
