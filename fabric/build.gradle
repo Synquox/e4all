@@ -95,6 +95,8 @@ tasks.register("modernRemapJar", net.fabricmc.loom.task.RemapJarTask) {
     archiveClassifier = "modern"
     sourceNamespace = "intermediary"
     targetNamespace = "named"
+    addNestedDependencies = true
+    nestedJars.from(tasks.remapJar.nestedJars)
 }
 
 assemble.dependsOn(modernRemapJar)
@@ -185,7 +187,7 @@ publishMods {
         projectId = project.findProperty("curseforgeId") ?: ""
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
-                "26.1", "26.2", "26.3-snapshot-9", "26.3", "26.4-snapshot-1", "26.4-snapshot-2"
+                "26.1", "26.2", "26.3-snapshot-9", "26.3", "26.4-snapshot-1", "26.4-snapshot-2", "26.4-snapshot-3", "26.4-snapshot-4", "26.4-snapshot-5"
         )
 
         requires {
@@ -203,7 +205,7 @@ publishMods {
         file = modernRemapJar.archiveFile
         version = project.version + "-fabric-modern"
         minecraftVersions.addAll(
-                "26.1", "26.2", "26.3-snapshot-9", "26.3", "26.4-snapshot-1", "26.4-snapshot-2"
+                "26.1", "26.2", "26.3-snapshot-9", "26.3", "26.4-snapshot-1", "26.4-snapshot-2", "26.4-snapshot-3", "26.4-snapshot-4", "26.4-snapshot-5"
         )
 
         requires {

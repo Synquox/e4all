@@ -62,6 +62,7 @@ public class VoiceClientStreamHandler extends SimpleChannelInboundHandler<ByteBu
                     E4allClient.LOGGER.debug("e4all voice: client voice channel close callback failed", t);
                 }
             }
+            ClientVoiceNegotiator.INSTANCE.onVoiceChannelClosed(ctx.channel());
         } else {
             E4allClient.LOGGER.debug("e4all voice: closed channel was not the active channel; keeping receive queue alive");
         }

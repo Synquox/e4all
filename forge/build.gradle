@@ -8,6 +8,15 @@ architectury {
     forge()
 }
 
+def mcFloorVersion = (rootProject.findProperty("forge_minecraft_version") ?: rootProject.minecraft_version).toString()
+if (mcFloorVersion.tokenize(".")[0].toInteger() >= 26) {
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+}
+
 loom {
     forge {
         mixinConfig "e4all.mixins.json"
@@ -42,10 +51,12 @@ dependencies {
 
 processResources {
     def modVersion = project.version
+    def mcRange = rootProject.forge_minecraft_range
     inputs.property "version", modVersion
+    inputs.property "minecraftRange", mcRange
 
     filesMatching("META-INF/mods.toml") {
-        expand "version": modVersion
+        expand "version": modVersion, "minecraftRange": mcRange
     }
 }
 
@@ -61,9 +72,24 @@ shadowJar {
     relocate "dev.dirs", "link.e4mc.shadow.dirs"
 }
 
-remapJar {
-    input.set shadowJar.archiveFile
-    dependsOn shadowJar
+if (tasks.findByName("remapJar") != null) {
+    tasks.named("remapJar").configure {
+        input.set shadowJar.archiveFile
+        dependsOn shadowJar
+    }
+} else {
+    tasks.named("jar").configure {
+        archiveClassifier = "dev"
+    }
+    shadowJar {
+        archiveClassifier = ""
+        dependsOn tasks.jar
+        from zipTree(tasks.jar.archiveFile)
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+    tasks.named("assemble").configure {
+        dependsOn shadowJar
+    }
 }
 
 sourcesJar {

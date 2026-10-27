@@ -9,10 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = {
-        "net.minecraft.client.gui.screens.ShareToLanScreen",
-        "net.minecraft.class_527"
-}, remap = false)
+@Mixin(net.minecraft.client.gui.screens.ShareToLanScreen.class)
 public abstract class ShareToLanScreenMixin extends Screen {
     @Unique
     private Object e4all$button = null;

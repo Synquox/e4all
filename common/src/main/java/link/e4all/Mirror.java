@@ -132,9 +132,6 @@ public class Mirror {
     };
 
     public static ClickEvent runCommand(String command) {
-        try {
-            return new ClickEvent(ClickEvent.Action.RUN_COMMAND, command);
-        } catch (Throwable ignored) {}
         for (String className : RUNCOMMAND_CLASS_NAMES) {
             try {
                 Class<?> clazz = Class.forName(className);
@@ -153,9 +150,6 @@ public class Mirror {
     }
 
     public static ClickEvent copyToClipboard(String text) {
-        try {
-            return new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, text);
-        } catch (Throwable ignored) {}
         for (String className : COPYTOCLIPBOARD_CLASS_NAMES) {
             try {
                 Class<?> clazz = Class.forName(className);
@@ -174,11 +168,6 @@ public class Mirror {
     }
 
     public static ClickEvent openUrlEvent(String url) {
-        try {
-            return new ClickEvent(ClickEvent.Action.OPEN_URL, url);
-        } catch (Throwable ignored) {}
-        // Modern MC (1.21.5+): ClickEvent is a sealed interface with subclasses,
-        // e.g. ClickEvent.OpenUrl(URI). Build it reflectively across mappings.
         for (String className : OPENURL_CLASS_NAMES) {
             try {
                 Class<?> clazz = Class.forName(className);
@@ -203,9 +192,6 @@ public class Mirror {
     }
 
     public static HoverEvent showText(Component text) {
-        try {
-            return new HoverEvent(HoverEvent.Action.SHOW_TEXT, text);
-        } catch (Throwable ignored) {}
         for (String className : SHOWTEXT_CLASS_NAMES) {
             try {
                 Class<?> clazz = Class.forName(className);
@@ -748,16 +734,17 @@ public class Mirror {
                         return;
                     } catch (Throwable ignored) {}
                     try {
-                        Minecraft.getInstance().player.sendSystemMessage(message);
+                        Method sendSys = Minecraft.getInstance().player.getClass().getMethod("sendSystemMessage", Component.class);
+                        sendSys.invoke(Minecraft.getInstance().player, message);
                         return;
                     } catch (Throwable ignored) {}
                 }
-                if (Minecraft.getInstance().gui != null && Minecraft.getInstance().gui.getChat() != null) {
-                    try {
+                try {
+                    if (Minecraft.getInstance().gui != null && Minecraft.getInstance().gui.getChat() != null) {
                         Minecraft.getInstance().gui.getChat().addMessage(message);
                         return;
-                    } catch (Throwable ignored) {}
-                }
+                    }
+                } catch (Throwable ignored) {}
 
                 Object chat = null;
                 Object gui = Minecraft.getInstance().gui;

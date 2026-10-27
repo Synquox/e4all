@@ -71,11 +71,9 @@ public abstract class ServerConnectionListenerMixin {
         synchronized (E4allClient.SESSION_LOCK) {
             QuiclimeSession existing = E4allClient.session;
 
-            // keep active or reconnecting session on LAN re-open
             if (existing != null && existing.ownsServer(server)
                     && (existing.state == QuiclimeSession.State.STARTING
-                        || existing.state == QuiclimeSession.State.STARTED
-                        || existing.state == QuiclimeSession.State.RECONNECTING)) {
+                        || existing.state == QuiclimeSession.State.STARTED)) {
                 E4allClient.LOGGER.info("e4all: relay session already active for this world (state: {}), keeping it",
                         existing.state);
                 return;
@@ -88,7 +86,7 @@ public abstract class ServerConnectionListenerMixin {
                 existing.stop(); // asynchronous, never blocks the server thread
             }
 
-            QuiclimeSession session = new QuiclimeSession(childHandler, group, server);
+            QuiclimeSession session = new QuiclimeSession(childHandler, group, server, i);
             E4allClient.session = session;
             E4allClient.LOGGER.info("e4all: starting a relay session for the current world ({})",
                     ServerStartupTracker.describe(server));

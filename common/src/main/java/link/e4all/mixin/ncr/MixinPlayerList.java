@@ -11,8 +11,8 @@ import net.minecraft.server.players.PlayerList;
 @Mixin(PlayerList.class)
 public class MixinPlayerList {
 
-    @Inject(method = "/^(verifyChatTrusted|m_247528_|method_44793)$/",
-            at = @At("HEAD"), cancellable = true, require = 0, remap = false)
+    @Inject(method = "verifyChatTrusted",
+            at = @At("HEAD"), cancellable = true, require = 0)
     private void e4all$onVerifyChatTrusted(PlayerChatMessage playerChatMessage, CallbackInfoReturnable<Boolean> info) {
         if (Config.INSTANCE.offlineMode.value()) {
             info.setReturnValue(true);

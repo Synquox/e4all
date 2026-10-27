@@ -3,8 +3,6 @@ package link.e4all;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
-import java.util.concurrent.atomic.AtomicReference;
-
 public final class ResourceLocReflector {
     private ResourceLocReflector() {}
 
@@ -41,26 +39,35 @@ public final class ResourceLocReflector {
         if (c != null) return c;
         synchronized (LOCK) {
             if (cachedClass == null) {
-                ClassLoader[] loaders = collectClassLoaders();
-                Class<?> found = null;
-                for (String fqn : CANDIDATE_FQNS) {
-                    for (ClassLoader cl : loaders) {
-                        try {
-                            Class<?> probed = Class.forName(fqn, false, cl);
-                            if (probed != null) {
-                                found = probed;
-                                break;
-                            }
-                        } catch (ClassNotFoundException | LinkageError ignored) {
-                        }
-                    }
-                    if (found != null) break;
-                }
+                Class<?> found = findClass(CANDIDATE_FQNS);
                 if (found == null) return null;
                 cachedClass = found;
             }
             return cachedClass;
         }
+    }
+
+    public static Class<?> findClass(String... names) {
+        ClassLoader[] loaders = collectClassLoaders();
+        for (String name : names) {
+            for (ClassLoader cl : loaders) {
+                try {
+                    return Class.forName(name, false, cl);
+                } catch (ClassNotFoundException | LinkageError ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    public static Class<?> findClass(ClassLoader loader, String... names) {
+        for (String name : names) {
+            try {
+                return Class.forName(name, false, loader);
+            } catch (ClassNotFoundException ignored) {
+            }
+        }
+        return null;
     }
 
     static ClassLoader[] collectClassLoaders() {

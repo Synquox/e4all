@@ -5,9 +5,9 @@ import link.e4all.voice.VoiceControlPayload;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -16,7 +16,7 @@ public class ClientboundCustomPayloadPacketMixin {
 
     @Inject(method = "readPayload",
             at = @At("HEAD"), require = 0)
-    private static void e4all$captureVoicePayload(ResourceLocation id, FriendlyByteBuf buf,
+    private static void e4all$captureVoicePayload(@Coerce Object id, FriendlyByteBuf buf,
                                                   CallbackInfoReturnable<CustomPacketPayload> cir) {
         try {
             if (!VoiceControlPayload.isOwnChannel(id)) return;

@@ -21,7 +21,7 @@ public abstract class MultiplayerOptionsScreenMixin extends Screen {
         super(component);
     }
 
-    @Inject(method = "init", at = @At("TAIL"), require = 0)
+    @Inject(method = {"init", "method_25426", "m_7856_"}, at = @At("TAIL"), require = 0)
     private void e4all$onInit(CallbackInfo ci) {
         this.e4all$button = ScreenWidgetHelper.updateOrCreateOnlineModeButton(this, this.e4all$button, "MultiplayerOptionsScreen");
     }

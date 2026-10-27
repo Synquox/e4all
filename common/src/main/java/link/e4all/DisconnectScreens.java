@@ -110,22 +110,31 @@ public final class DisconnectScreens {
         }
     }
 
-    private static String translationKeyOf(Component component) {
-        try {
-            Object contents = component.getClass().getMethod("getContents").invoke(component);
-            if (contents != null) {
+    public static String translationKeyOf(Component component) {
+        if (component == null) return null;
+        Object contents = null;
+        for (String mName : new String[]{"getContents", "method_43471", "m_237141_"}) {
+            try {
+                contents = component.getClass().getMethod(mName).invoke(component);
+                if (contents != null) break;
+            } catch (Throwable ignored) {
+            }
+        }
+        if (contents != null) {
+            for (String mName : new String[]{"getKey", "method_43478", "m_237309_"}) {
                 try {
-                    Object key = contents.getClass().getMethod("getKey").invoke(contents);
+                    Object key = contents.getClass().getMethod(mName).invoke(contents);
                     if (key instanceof String s) return s;
                 } catch (Throwable ignored) {
                 }
             }
-        } catch (Throwable ignored) {
         }
-        try {
-            Object key = component.getClass().getMethod("getKey").invoke(component);
-            if (key instanceof String s) return s;
-        } catch (Throwable ignored) {
+        for (String mName : new String[]{"getKey", "method_10892", "m_131310_"}) {
+            try {
+                Object key = component.getClass().getMethod(mName).invoke(component);
+                if (key instanceof String s) return s;
+            } catch (Throwable ignored) {
+            }
         }
         return null;
     }

@@ -48,13 +48,20 @@ public final class ServerStartupTracker {
         }
     }
 
-    // server exists but has not ticked once yet
+    public static boolean isWaitingForFirstTick(MinecraftServer server) {
+        if (server == null) return false;
+        ServerState state = stateOf(server, false);
+        return state == null || state.ticks == 0 || state.ticks == 1;
+    }
+
+    @Deprecated
     public static boolean isStarting(MinecraftServer server) {
         if (server == null) return false;
         ServerState state = stateOf(server, false);
         return state == null || state.ticks == 0;
     }
 
+    @Deprecated
     public static boolean isMidFirstTick(MinecraftServer server) {
         if (server == null) return false;
         ServerState state = stateOf(server, false);
@@ -88,7 +95,7 @@ public final class ServerStartupTracker {
         long deadline = System.currentTimeMillis() + Math.max(0L, timeoutMs);
         while (System.currentTimeMillis() < deadline) {
             if (isStopping(server)) return false;
-            if (!isStarting(server) && !isMidFirstTick(server)) {
+            if (!isWaitingForFirstTick(server)) {
                 try {
                     if (ownsActiveSession == null || ownsActiveSession.getAsBoolean()) return true;
                 } catch (Throwable ignored) {

@@ -13,6 +13,9 @@ description = '''
 The e4mc fork that lets anyone join your LAN world from anywhere, even with offline accounts.
 '''
 
+[[mixins]]
+config = "e4all.mixins.json"
+
 [[dependencies.e4all]]
 modId = "forge"
 mandatory = true
@@ -23,6 +26,6 @@ side = "BOTH"
 [[dependencies.e4all]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[1.18,)"
+versionRange = "${minecraftRange}"
 ordering = "NONE"
 side = "BOTH"

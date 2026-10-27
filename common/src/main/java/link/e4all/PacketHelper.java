@@ -61,16 +61,7 @@ public final class PacketHelper {
     private PacketHelper() {}
 
     private static Class<?> findClass(String[] candidateNames) {
-        ClassLoader[] loaders = ResourceLocReflector.collectClassLoaders();
-        for (String fqn : candidateNames) {
-            for (ClassLoader cl : loaders) {
-                try {
-                    Class<?> cls = Class.forName(fqn, false, cl);
-                    if (cls != null) return cls;
-                } catch (ClassNotFoundException | LinkageError ignored) {}
-            }
-        }
-        return null;
+        return ResourceLocReflector.findClass(candidateNames);
     }
 
     // version detection across mojmap/intermediary/srg
@@ -387,15 +378,11 @@ public final class PacketHelper {
 
     private static boolean isResourceLoc(Class<?> candidate) {
         if (candidate == null) return false;
-        Class<?> resourceLocClass = ResourceLocReflector.classOrNull();
-        if (resourceLocClass != null && resourceLocClass.isAssignableFrom(candidate)) return true;
-        if (candidate.getName().equals("net.minecraft.resources.ResourceLocation")
+        if (ResourceLocReflector.isAssignableFrom(candidate)) return true;
+        return candidate.getName().equals("net.minecraft.resources.ResourceLocation")
                 || candidate.getName().equals("net.minecraft.resources.Identifier")
                 || candidate.getName().equals("net.minecraft.util.Identifier")
-                || candidate.getName().equals("net.minecraft.class_2960")) {
-            return true;
-        }
-        return ResourceLocReflector.isAssignableFrom(candidate);
+                || candidate.getName().equals("net.minecraft.class_2960");
     }
 
     private static Object makePayload(Class<?> payloadClass, Object channel, byte[] data)

@@ -38,6 +38,7 @@ public final class ClientVoiceNegotiator {
     private volatile DialtoneChannel voiceChannel;
     private volatile boolean negotiating = false;
     private volatile boolean connectedMessageShown = false;
+    private final AtomicBoolean failureMessageShown = new AtomicBoolean(false);
     private final AtomicReference<LinkedBlockingQueue<VoiceDataPacket>> receiveQueue = new AtomicReference<>();
     private final java.util.concurrent.atomic.AtomicLong helloGeneration = new java.util.concurrent.atomic.AtomicLong();
     private final java.util.concurrent.atomic.AtomicLong dialGeneration = new java.util.concurrent.atomic.AtomicLong();
@@ -53,6 +54,8 @@ public final class ClientVoiceNegotiator {
         boolean hasVoiceClient = hasSvc();
         stopped = false;
         negotiationFailed = false;
+        connectedMessageShown = false;
+        failureMessageShown.set(false);
         offerSeen = false;
         helloRetries = 0;
         E4allClient.LOGGER.info("e4all voice: sending HELLO (hasVoiceClient={})", hasVoiceClient);
@@ -90,7 +93,7 @@ public final class ClientVoiceNegotiator {
             E4allClient.LOGGER.error(
                     "e4all voice: voice negotiation failed permanently - {} HELLO attempts produced no OFFER",
                     helloRetries + 1);
-            showFailure(VoiceFailure.NEGOTIATION_TIMEOUT);
+            reportFailure(VoiceFailure.NEGOTIATION_TIMEOUT);
             return;
         }
         helloRetries++;
@@ -110,13 +113,13 @@ public final class ClientVoiceNegotiator {
 
         if (failure != null) {
             E4allClient.LOGGER.warn("e4all voice: host reported voice failure: {}", failure.logTag);
-            showFailure(failure);
+            reportFailure(failure);
             return;
         }
 
         if (transport == VoiceControl.TRANSPORT_NONE) {
             E4allClient.LOGGER.info("e4all voice: host offered TRANSPORT_NONE, voice disabled");
-            showFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
+            reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
             return;
         }
 
@@ -126,6 +129,7 @@ public final class ClientVoiceNegotiator {
                 VoiceControl.sendToServer(VoiceControl.encodeResult(
                         false, VoiceControl.TRANSPORT_DIALTONE, 0,
                         VoiceFailure.TRANSPORT_UNAVAILABLE, List.of()));
+                reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
                 return;
             }
             if (voiceChannel != null && voiceChannel.isActive()) {
@@ -145,11 +149,13 @@ public final class ClientVoiceNegotiator {
             VoiceControl.sendToServer(VoiceControl.encodeResult(
                     false, VoiceControl.TRANSPORT_UDP, 0,
                     VoiceFailure.TRANSPORT_UNAVAILABLE, List.of()));
+            reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
         } else {
             E4allClient.LOGGER.warn("e4all voice: unknown transport {} offered; reporting failure", transport);
             VoiceControl.sendToServer(VoiceControl.encodeResult(
                     false, transport, 0,
                     VoiceFailure.TRANSPORT_UNAVAILABLE, List.of()));
+            reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
         }
     }
 
@@ -189,8 +195,19 @@ public final class ClientVoiceNegotiator {
 
                 int rttMs = measureRtt(ch);
 
+                if (!ch.isActive()) {
+                    throw new IllegalStateException("Dialtone voice channel closed during handshake");
+                }
+
+                if (stopped || dialGeneration.get() != gen || !isSessionAlive()) {
+                    E4allClient.LOGGER.debug("e4all voice: negotiation ended before the dial completed; closing the channel");
+                    ch.close();
+                    return;
+                }
+
                 if (resultSent.compareAndSet(false, true)) {
                     voiceChannel = ch;
+                    reportSuccess(VoiceControl.TRANSPORT_DIALTONE, rttMs);
                     E4allClient.LOGGER.info("e4all voice: Dialtone voice connected (RTT {}ms)", rttMs);
                     DialtoneClientVoicechatSocket activeSocket = DialtoneClientVoicechatSocket.getActiveInstance();
                     if (activeSocket != null) {
@@ -216,8 +233,10 @@ public final class ClientVoiceNegotiator {
                         E4allClient.LOGGER.warn("e4all voice: late dial finished {}ms after the OFFER, beyond recovery window", elapsedMs);
                         ch.close();
                     } else {
-                        E4allClient.LOGGER.info("e4all voice: adopting late dial as relay recovery ({}ms after OFFER)", elapsedMs);
+                        E4allClient.LOGGER.info("e4all voice: adopting late Dialtone connection ({}ms after OFFER)", elapsedMs);
                         voiceChannel = ch;
+                        negotiationFailed = false;
+                        reportSuccess(VoiceControl.TRANSPORT_DIALTONE, rttMs);
                         DialtoneClientVoicechatSocket lateSocket = DialtoneClientVoicechatSocket.getActiveInstance();
                         if (lateSocket != null) {
                             lateSocket.flushPending(ch);
@@ -233,6 +252,7 @@ public final class ClientVoiceNegotiator {
                     VoiceControl.sendToServer(VoiceControl.encodeResult(
                             false, VoiceControl.TRANSPORT_DIALTONE, 0,
                             VoiceFailure.TRANSPORT_UNAVAILABLE, List.of()));
+                    reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
                 }
                 if (ch != null) {
                     try { ch.close(); } catch (Throwable ignored) {}
@@ -244,14 +264,21 @@ public final class ClientVoiceNegotiator {
           .exceptionally(t -> {
               Throwable cause = (t instanceof CompletionException ce && ce.getCause() != null) ? ce.getCause() : t;
               if (cause instanceof TimeoutException) {
-                  E4allClient.LOGGER.warn("e4all voice: Dialtone dial timed out after {}ms - keeping the dial alive as a relay recovery attempt", CONNECT_TIMEOUT_MS);
+                  E4allClient.LOGGER.warn("e4all voice: dial timed out after {}ms; waiting for late connection", CONNECT_TIMEOUT_MS);
                   if (resultSent.compareAndSet(false, true)) {
                       VoiceControl.sendToServer(VoiceControl.encodeResult(
                               false, VoiceControl.TRANSPORT_DIALTONE, 0,
                               VoiceFailure.TIMEOUT, List.of()));
+                      reportFailure(VoiceFailure.TIMEOUT);
                   }
               } else {
                   E4allClient.LOGGER.debug("e4all voice: dial future completed exceptionally", t);
+                  if (resultSent.compareAndSet(false, true)) {
+                      VoiceControl.sendToServer(VoiceControl.encodeResult(
+                              false, VoiceControl.TRANSPORT_DIALTONE, 0,
+                              VoiceFailure.TRANSPORT_UNAVAILABLE, List.of()));
+                      reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
+                  }
               }
               negotiating = false;
               return null;
@@ -283,14 +310,55 @@ public final class ClientVoiceNegotiator {
         if (ok) {
             E4allClient.LOGGER.info("e4all voice: READY - voice connected via {} (RTT {}ms)",
                     transportName(transport), rttMs);
-            if (!connectedMessageShown) {
-                connectedMessageShown = true;
-                showSuccess(transport, rttMs);
+            DialtoneChannel current = voiceChannel;
+            if (current != null && current.isActive()) {
+                reportSuccess(transport, rttMs);
+            } else {
+                E4allClient.LOGGER.debug("e4all voice: ignoring stale READY success without an active voice stream");
             }
         } else {
             E4allClient.LOGGER.warn("e4all voice: READY - voice failed (failure={})",
                     failure != null ? failure.logTag : "unknown");
+            if (voiceChannel == null || !voiceChannel.isActive()) {
+                reportFailure(failure);
+            } else {
+                E4allClient.LOGGER.debug("e4all voice: ignoring stale READY failure after the voice stream connected");
+            }
+        }
+    }
+
+    public void onVoiceChannelClosed(io.netty.channel.Channel closedChannel) {
+        if (voiceChannel != closedChannel) return;
+        voiceChannel = null;
+        if (stopped || !isSessionAlive()) return;
+        negotiating = false;
+        E4allClient.LOGGER.warn("e4all voice: active Dialtone voice channel closed unexpectedly");
+        reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
+    }
+
+    public void onControlPayloadFailure() {
+        DialtoneChannel current = voiceChannel;
+        if (current != null && current.isActive()) return;
+        helloGeneration.incrementAndGet();
+        negotiating = false;
+        E4allClient.LOGGER.warn("e4all voice: received a malformed voice control message during negotiation");
+        reportFailure(VoiceFailure.TRANSPORT_UNAVAILABLE);
+    }
+
+    private void reportFailure(VoiceFailure failure) {
+        negotiationFailed = true;
+        if (stopped || !isSessionAlive()) return;
+        if (failureMessageShown.compareAndSet(false, true)) {
             showFailure(failure);
+        }
+    }
+
+    private void reportSuccess(byte transport, int rttMs) {
+        negotiationFailed = false;
+        failureMessageShown.set(false);
+        if (!connectedMessageShown) {
+            connectedMessageShown = true;
+            showSuccess(transport, rttMs);
         }
     }
 

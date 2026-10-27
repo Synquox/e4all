@@ -121,7 +121,7 @@ public class E4allClient {
                                     if (E4allClient.session.state != QuiclimeSession.State.STOPPED) {
                                         E4allClient.session.stopSync();
                                     }
-                                    E4allClient.session = new QuiclimeSession(rawHandler, group, owner);
+                                    E4allClient.session = new QuiclimeSession(rawHandler, group, owner, E4allClient.session.localPort());
                                     E4allClient.session.startAsync();
                                     Mirror.sendSuccessToSource(ctx.getSource(), Mirror.translatable("text.e4all_minecraft.restartingRelay"));
                                 } else {
@@ -165,7 +165,7 @@ public class E4allClient {
         }
     }
 
-    private static final String DISCORD_URL = "https://discord.gg/McAy9u56NC";
+    public static final String DISCORD_URL = "https://discord.gg/mUYW9Rw2ae";
     private static final String GITHUB_URL = "https://github.com/Synquox/e4all";
 
     public static Component infoMessage() {

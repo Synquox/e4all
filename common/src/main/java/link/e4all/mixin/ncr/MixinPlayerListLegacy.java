@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(PlayerList.class)
 public class MixinPlayerListLegacy {
 
-    @Inject(method = "/^(m_241091_|method_44793_)$/",
+    @Inject(method = {"m_241091_", "method_44793"},
             at = @At("HEAD"), cancellable = true, require = 0, remap = false)
     private void e4all$onVerifyChatTrustedLegacy(PlayerChatMessage message, @Coerce Object chatSender,
                                                  CallbackInfoReturnable<Boolean> info) {

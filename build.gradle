@@ -1,6 +1,7 @@
 plugins {
-    id "architectury-plugin" version "3.4-SNAPSHOT"
-    id "dev.architectury.loom" version "1.13-SNAPSHOT" apply false
+    id "architectury-plugin" version "3.5-SNAPSHOT"
+    id "dev.architectury.loom" version "1.17-SNAPSHOT" apply false
+    id "dev.architectury.loom-no-remap" version "1.17-SNAPSHOT" apply false
     id 'com.gradleup.shadow' version '9.6.1' apply false
 }
 
@@ -9,10 +10,55 @@ architectury {
 }
 
 subprojects {
-    apply plugin: "dev.architectury.loom"
+    def loaderMcVersion = rootProject.findProperty(project.name + "_minecraft_version") ?: rootProject.minecraft_version
+    def isMc26Plus = { String v ->
+        if (v == null) return false
+        try {
+            return v.tokenize(".")[0].toInteger() >= 26
+        } catch (Exception ignored) {
+            return false
+        }
+    }
+
+    if (project.name != "fabric" && isMc26Plus(loaderMcVersion.toString())) {
+        apply plugin: "dev.architectury.loom-no-remap"
+    } else {
+        apply plugin: "dev.architectury.loom"
+    }
+
+    architectury {
+        minecraft = loaderMcVersion
+    }
 
     loom {
         silentMojangMappingsLicense()
+        try {
+            def cls = Class.forName("net.fabricmc.loom.util.TinyRemapperLoggerAdapter")
+            def unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe")
+            unsafeField.setAccessible(true)
+            def unsafe = (sun.misc.Unsafe) unsafeField.get(null)
+            def field = cls.getDeclaredField("LOGGER")
+            def base = unsafe.staticFieldBase(field)
+            def offset = unsafe.staticFieldOffset(field)
+            def orig = unsafe.getObject(base, offset)
+            if (!(orig instanceof java.lang.reflect.Proxy)) {
+                def proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    cls.classLoader,
+                    [org.slf4j.Logger.class] as Class[],
+                    { p, m, args ->
+                        if (m.name == "warn" && args != null && args.length > 0) {
+                            def msg = String.valueOf(args[0])
+                            if (msg.contains("Cannot remap ") && msg.contains("because it does not exist in any of the targets")) {
+                                return null
+                            }
+                        }
+                        return m.invoke(orig, args)
+                    } as java.lang.reflect.InvocationHandler
+                )
+                unsafe.putObject(base, offset, proxy)
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     // bundle android natives and netty dns into the -android jar variant
@@ -34,7 +80,7 @@ subprojects {
             def releaseJars = libsDir.listFiles().findAll { it.name.endsWith(".jar") &&
                     !(it.name ==~ /.*(dev|sources|shadow|slim|android).*\.jar/) }
             // android-only entries: just the bionic natives now, dns classes are gone
-            def androidOnlyPrefixes = ["assets/e4all/natives/android-"]
+            def androidOnlyPrefix = "assets/e4all/natives/android-"
             def newestNative = 0L
             nativesRoot.eachFileRecurse(groovy.io.FileType.FILES) { f ->
                 newestNative = Math.max(newestNative, f.lastModified())
@@ -45,7 +91,7 @@ subprojects {
                     def entries = zf.entries()
                     while (entries.hasMoreElements()) {
                         def name = entries.nextElement().name
-                        if (androidOnlyPrefixes.any { name.startsWith(it) }) return true
+                        if (name.startsWith(androidOnlyPrefix)) return true
                     }
                     return false
                 } finally {
@@ -74,15 +120,14 @@ subprojects {
                 // -android variant: same classes as release, plus only aarch64 natives (x86_64 android is emulator-only)
                 def aout = new java.util.zip.ZipOutputStream(new FileOutputStream(tmpAndroid))
                 zin.entries().each { entry ->
-                    if (!entry.name.startsWith("assets/e4all/natives/android-")) {
+                    def androidOnlyEntry = entry.name.startsWith(androidOnlyPrefix)
+                    if (!androidOnlyEntry) {
                         aout.putNextEntry(new java.util.zip.ZipEntry(entry.name))
                         if (!entry.isDirectory()) {
                             zin.getInputStream(entry).withCloseable { aout << it }
                         }
                         aout.closeEntry()
                     }
-                    def androidOnlyEntry = entry.name.startsWith("assets/e4all/natives/android-") ||
-                            androidOnlyPrefixes.any { entry.name.startsWith(it) }
                     if (!androidOnlyEntry) {
                         zout.putNextEntry(new java.util.zip.ZipEntry(entry.name))
                         if (!entry.isDirectory()) {
@@ -110,9 +155,10 @@ subprojects {
     }
 
     dependencies {
-        minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
-        // The following line declares the mojmap mappings, you may use other mappings as well
-        mappings loom.officialMojangMappings()
+        minecraft "com.mojang:minecraft:${loaderMcVersion}"
+        if (project.name == "fabric" || !isMc26Plus(loaderMcVersion.toString())) {
+            mappings loom.officialMojangMappings()
+        }
         // The following line declares the yarn mappings you may select this one as well.
         // mappings "net.fabricmc:yarn:1.18.2+build.4:v2"
     }

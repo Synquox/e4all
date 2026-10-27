@@ -14,8 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(targets = {
-        "net.minecraft.client.gui.screens.WorldOptionsScreen",
-        "net.minecraft.client.gui.screens.options.WorldOptionsScreen"
+        "net.minecraft.client.gui.screens.WorldOptionsScreen"
 }, remap = false)
 public abstract class WorldOptionsScreenMixin extends Screen {
     protected WorldOptionsScreenMixin(Component component) {

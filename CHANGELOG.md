@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.0
+
+* Ported Forge to Minecraft 1.20.6 - 26.3.
+* The Forge version of 2.3.0 for 1.18-1.20.4 will come out late.
+* Added 26.4 snapshot support up to snapshot 5 (Fabric & NeoForge).
+* Added a new chat box when hosting a world.
+* Fixed NoChatReports crash on newer Minecraft versions (1.21+).
+* Fixed random disconnects and timeout issues on Dialtone (P2P).
+* Other minor fixes and cleanups.
+
 ## 2.2.0
 
 * Synced upstream changes from e4mc 6.2.1 through 6.2.3.

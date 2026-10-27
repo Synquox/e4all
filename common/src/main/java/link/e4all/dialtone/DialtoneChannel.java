@@ -13,6 +13,7 @@ import link.e4mc.iroh.Stream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DialtoneChannel extends AbstractChannel {
@@ -30,6 +31,7 @@ public class DialtoneChannel extends AbstractChannel {
     AtomicBoolean writeInFlight = new AtomicBoolean(false);
     AtomicBoolean writePending = new AtomicBoolean(false);
     private long bytesRead;
+    private ChannelPromise connectPromise;
 
 
     public DialtoneChannel() {
@@ -88,6 +90,11 @@ public class DialtoneChannel extends AbstractChannel {
             return;
         }
         closed = true;
+        ChannelPromise cp = this.connectPromise;
+        if (cp != null && !cp.isDone()) {
+            this.connectPromise = null;
+            cp.tryFailure(new java.nio.channels.ClosedChannelException());
+        }
         try {
             if (stream != null) {
                 stream.close();
@@ -95,12 +102,22 @@ public class DialtoneChannel extends AbstractChannel {
         } catch (Throwable e) {
             E4allClient.LOGGER.warn("Error closing dialtone stream", e);
         }
-        try {
-            if (connection != null) {
-                connection.close(0, new byte[0]);
+        final Connection connToClose = this.connection;
+        if (connToClose != null) {
+            try {
+                eventLoop().schedule(() -> {
+                    try {
+                        connToClose.close(0, new byte[0]);
+                    } catch (Throwable e) {
+                        E4allClient.LOGGER.debug("Error closing delayed dialtone connection", e);
+                    }
+                }, 3, TimeUnit.SECONDS);
+            } catch (Throwable t) {
+                try {
+                    connToClose.close(0, new byte[0]);
+                } catch (Throwable ignored) {
+                }
             }
-        } catch (Throwable e) {
-            E4allClient.LOGGER.warn("Error closing dialtone connection", e);
         }
         stream = null;
         connection = null;
@@ -139,11 +156,39 @@ public class DialtoneChannel extends AbstractChannel {
             readInFlight.set(false);
             eventLoop().execute(() -> {
                 if (!closed) {
-                    pipeline().fireExceptionCaught(t);
+                    if (isConnectionLost(t)) {
+                        close();
+                    } else {
+                        pipeline().fireExceptionCaught(t);
+                    }
                 }
             });
             return null;
         });
+    }
+
+    public static boolean isConnectionLost(Throwable t) {
+        if (t == null) return false;
+        Throwable curr = t;
+        while (curr != null) {
+            if (curr instanceof link.e4mc.iroh.NativeException || curr instanceof java.io.IOException) {
+                String msg = curr.getMessage();
+                if (msg != null) {
+                    String lower = msg.toLowerCase();
+                    if (lower.contains("connection lost")
+                            || lower.contains("connection closed")
+                            || lower.contains("reset")
+                            || lower.contains("broken pipe")
+                            || lower.contains("timed out")
+                            || lower.contains("shutting down")
+                            || lower.contains("not connected")) {
+                        return true;
+                    }
+                }
+            }
+            curr = curr.getCause();
+        }
+        return false;
     }
 
     private void trackRead(int bytes) {
@@ -184,8 +229,7 @@ public class DialtoneChannel extends AbstractChannel {
             break;
         }
 
-        // small packets: one native write + thread hop each serializes the stream, so coalesce
-        if (buf.readableBytes() <= COALESCE_THRESHOLD && coalesceAndWrite(in)) {
+        if (in.nioBufferCount() > 1 && buf.readableBytes() <= COALESCE_THRESHOLD && coalesceAndWrite(in)) {
             return;
         }
 
@@ -238,36 +282,36 @@ public class DialtoneChannel extends AbstractChannel {
     }
 
     private boolean coalesceAndWrite(ChannelOutboundBuffer in) {
-        ByteBuf agg = Unpooled.buffer(1024, MAX_COALESCE_BYTES);
-        int batched = 0;
-        try {
-            while (true) {
-                Object msg = in.current();
-                if (!(msg instanceof ByteBuf candidate) || !candidate.isReadable()) {
-                    break; // non-ByteBuf or empty: handled next round
-                }
-                if (batched > 0 && candidate.readableBytes() > agg.maxWritableBytes()) {
-                    break; // won't fit: leave for the next batch
-                }
-                agg.writeBytes(candidate);
-                in.remove();
-                batched++;
-            }
-        } catch (Throwable t) {
-            agg.release();
-            writeFailed(t);
-            return true;
-        }
-        if (batched == 0) {
-            agg.release();
+        int count = in.nioBufferCount();
+        if (count <= 1) {
             return false;
         }
-        byte[] arr = new byte[agg.readableBytes()];
-        agg.getBytes(agg.readerIndex(), arr);
-        agg.release();
+        ByteBuffer[] nioBuffers = in.nioBuffers(1024, MAX_COALESCE_BYTES);
+        count = in.nioBufferCount();
+        if (count <= 1) {
+            return false;
+        }
+        int bytesToWrite = (int) Math.min(in.nioBufferSize(), MAX_COALESCE_BYTES);
+        if (bytesToWrite <= 0) {
+            return false;
+        }
+
+        byte[] arr = new byte[bytesToWrite];
+        int written = 0;
+        for (int i = 0; i < count && written < bytesToWrite; i++) {
+            ByteBuffer nioBuf = nioBuffers[i];
+            int rem = Math.min(nioBuf.remaining(), bytesToWrite - written);
+            nioBuf.get(arr, written, rem);
+            written += rem;
+        }
+
+        final int finalWritten = written;
         try {
-            stream.writeIrohStreamByteArray(arr, 0, arr.length).thenAccept(nothing -> {
-                eventLoop().execute(() -> doWriteNext(in));
+            stream.writeIrohStreamByteArray(arr, 0, finalWritten).thenAccept(nothing -> {
+                eventLoop().execute(() -> {
+                    in.removeBytes(finalWritten);
+                    doWriteNext(in);
+                });
             }).exceptionally(t -> {
                 eventLoop().execute(() -> writeFailed(t));
                 return null;
@@ -281,7 +325,11 @@ public class DialtoneChannel extends AbstractChannel {
     private void writeFailed(Throwable t) {
         writeInFlight.set(false);
         if (!closed) {
-            pipeline().fireExceptionCaught(t);
+            if (isConnectionLost(t)) {
+                close();
+            } else {
+                pipeline().fireExceptionCaught(t);
+            }
         }
     }
 
@@ -324,23 +372,25 @@ public class DialtoneChannel extends AbstractChannel {
             if (!promise.setUncancellable() || !ensureOpen(promise)) {
                 return;
             }
+            connectPromise = promise;
 
             try {
                 if (remoteAddress instanceof DialtoneAddress dialtoneAddress) {
                     // voice uses the dedicated relay-less endpoint, so voice stays direct
+                    Endpoint connectEndpoint;
                     if (DialtoneAddress.VOICE_ALPN.equals(dialtoneAddress.alpn)) {
-                        endpoint = VoiceEndpointStack.INSTANCE.getOrCreate();
+                        connectEndpoint = VoiceEndpointStack.INSTANCE.getOrCreate();
                     } else {
-                        if (DialtoneAmbientSession.INSTANCE.endpoint == null) {
-                            DialtoneAmbientSession.INSTANCE.start();
-                        }
-                        endpoint = DialtoneAmbientSession.INSTANCE.endpoint;
+                        connectEndpoint = DialtoneAmbientSession.INSTANCE.getOrStart();
                     }
-                    endpoint
+                    endpoint = connectEndpoint;
+                    connectEndpoint
                             .connect(dialtoneAddress.actualAddress, dialtoneAddress.alpn.getBytes(StandardCharsets.UTF_8))
                             .thenAccept(conn -> {
                                 if (closed) {
                                     discardLateConnection(conn);
+                                    connectPromise = null;
+                                    safeSetFailure(promise, new java.nio.channels.ClosedChannelException());
                                     return;
                                 }
                                 connection = conn;
@@ -348,6 +398,8 @@ public class DialtoneChannel extends AbstractChannel {
                                     if (closed) {
                                         try { bidi.close(); } catch (Throwable ignored) {}
                                         discardLateConnection(conn);
+                                        connectPromise = null;
+                                        safeSetFailure(promise, new java.nio.channels.ClosedChannelException());
                                         return;
                                     }
                                     stream = bidi;
@@ -355,23 +407,30 @@ public class DialtoneChannel extends AbstractChannel {
                                         if (closed) {
                                             try { bidi.close(); } catch (Throwable ignored) {}
                                             discardLateConnection(conn);
+                                            connectPromise = null;
+                                            safeSetFailure(promise, new java.nio.channels.ClosedChannelException());
                                             return;
                                         }
+                                        connectPromise = null;
                                         pipeline().fireChannelActive();
                                         safeSetSuccess(promise);
                                     });
                                 }).exceptionally(t -> {
+                                    connectPromise = null;
                                     eventLoop().execute(() -> safeSetFailure(promise, annotateConnectException(t, remoteAddress)));
                                     return null;
                                 });
                             }).exceptionally(t -> {
+                                connectPromise = null;
                                 eventLoop().execute(() -> safeSetFailure(promise, annotateConnectException(t, remoteAddress)));
                                 return null;
                             });
                 } else {
+                    connectPromise = null;
                     throw new UnsupportedOperationException();
                 }
             } catch (Throwable t) {
+                connectPromise = null;
                 safeSetFailure(promise, annotateConnectException(t, remoteAddress));
             }
         }

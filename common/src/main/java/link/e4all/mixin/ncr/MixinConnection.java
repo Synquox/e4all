@@ -235,8 +235,18 @@ public abstract class MixinConnection {
     private static Object e4all$registryAccess(PacketListener listener) {
         try {
             ServerPlayer player = link.e4all.voice.VoiceControl.extractServerPlayer(listener);
-            if (player != null && player.getServer() != null) {
-                return player.getServer().registryAccess();
+            if (player != null) {
+                for (Method m : player.getClass().getMethods()) {
+                    if (m.getParameterCount() == 0 && m.getReturnType() == net.minecraft.server.MinecraftServer.class
+                            && (m.getName().equals("getServer") || m.getName().equals("server") || m.getName().equals("m_8991_") || m.getName().equals("method_3737"))) {
+                        try {
+                            Object server = m.invoke(player);
+                            if (server != null) {
+                                return ((net.minecraft.server.MinecraftServer) server).registryAccess();
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
             }
             Object server = link.e4all.voice.VoiceControl.extractServerFromListener(listener);
             if (server instanceof net.minecraft.server.MinecraftServer ms) {

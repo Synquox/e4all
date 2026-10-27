@@ -175,6 +175,9 @@ public final class VoiceControl {
             net.minecraft.client.Minecraft.getInstance().execute(() -> dispatchClientMessage(data));
         } catch (Throwable t) {
             E4allClient.LOGGER.warn("e4all voice: could not dispatch client voice control message", t);
+            if (data != null && data.length > 0 && (data[0] == MSG_OFFER || data[0] == MSG_READY)) {
+                ClientVoiceNegotiator.INSTANCE.onControlPayloadFailure();
+            }
         }
     }
 
@@ -218,11 +221,17 @@ public final class VoiceControl {
             }
         } catch (IOException e) {
             E4allClient.LOGGER.warn("e4all voice: malformed client-side control message", e);
+            if (data[0] == MSG_OFFER || data[0] == MSG_READY) {
+                ClientVoiceNegotiator.INSTANCE.onControlPayloadFailure();
+            }
         }
     }
 
     public static void sendToPlayer(ServerPlayer player, byte[] data) {
         try {
+            if (VoiceControlPayload.sendClientboundForge(player, data)) {
+                return;
+            }
             if (VoiceControlPayload.sendClientboundFabric(player, data)) {
                 return;
             }
@@ -234,6 +243,9 @@ public final class VoiceControl {
 
     public static void sendToServer(byte[] data) {
         try {
+            if (VoiceControlPayload.sendServerboundForge(data)) {
+                return;
+            }
             if (VoiceControlPayload.sendServerboundFabric(data)) {
                 return;
             }

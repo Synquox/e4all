@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(DiscardedPayload.class)
 public class DiscardedPayloadMixin {
 
-    @Inject(method = "/^lambda\\$codec\\$1$/", at = @At("HEAD"), require = 0, remap = false)
+    @Inject(method = "lambda$codec$1", at = @At("HEAD"), require = 0, remap = false)
     private static void e4all$captureVoicePayload(int maxSize, @Coerce Object id, FriendlyByteBuf buf,
                                                   CallbackInfoReturnable<DiscardedPayload> cir) {
         try {

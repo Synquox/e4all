@@ -11,6 +11,7 @@ import link.e4mc.iroh.Endpoint;
 import link.e4mc.iroh.NativeException;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
 
 public class DialtoneAmbientSession {
     public static final DialtoneAmbientSession INSTANCE = new DialtoneAmbientSession();
@@ -19,6 +20,7 @@ public class DialtoneAmbientSession {
             new DefaultThreadFactory("e4all-dialtone", true));
     volatile Endpoint endpoint;
     volatile Thread dispatcher;
+    private CompletableFuture<Void> closeFuture = CompletableFuture.completedFuture(null);
 
     private DialtoneAmbientSession() {}
 
@@ -30,23 +32,25 @@ public class DialtoneAmbientSession {
         return endpoint != null;
     }
 
-    public synchronized void start() throws Exception {
+    public synchronized Endpoint getOrStart() throws Exception {
+        if (endpoint != null) {
+            return endpoint;
+        }
+        if (!closeFuture.isDone()) {
+            throw new IllegalStateException("Dialtone endpoint shutdown is still in progress");
+        }
         if (AndroidDetector.isAndroid() && !AndroidNatives.hasIrohNative()) {
             E4allClient.LOGGER.warn("e4all: Dialtone (iroh) unavailable on Android: no Bionic iroh native bundled.");
             throw new UnsupportedOperationException("Dialtone is not supported on Android without a Bionic iroh native");
         }
-        if (endpoint != null || dispatcher != null) {
-            E4allClient.LOGGER.info("Cleaning up stale DialtoneAmbientSession before restart");
-            stop();
-        }
         E4allClient.LOGGER.info("Starting DialtoneAmbientSession!");
-        this.endpoint = new Endpoint(new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)}, QuiclimeSession.getRelayMap());
-        this.dispatcher = new Thread(() -> {
-            while (true) {
-                Endpoint ep = endpoint;
-                if (ep == null) break;
+        Endpoint createdEndpoint = new Endpoint(
+                new byte[][]{"e4mc-dialtone".getBytes(StandardCharsets.UTF_8)},
+                QuiclimeSession.getRelayMap());
+        Thread createdDispatcher = new Thread(() -> {
+            while (endpoint == createdEndpoint) {
                 try {
-                    Runnable polled = ep.pollCallbackLoop();
+                    Runnable polled = createdEndpoint.pollCallbackLoop();
                     polled.run();
                 } catch (NativeException e) {
                     E4allClient.LOGGER.error("poll exc, stopping", e);
@@ -56,8 +60,15 @@ public class DialtoneAmbientSession {
                 }
             }
         }, "Dialtone Session Dispatcher");
-        this.dispatcher.setDaemon(true);
-        this.dispatcher.start();
+        createdDispatcher.setDaemon(true);
+        this.endpoint = createdEndpoint;
+        this.dispatcher = createdDispatcher;
+        createdDispatcher.start();
+        return createdEndpoint;
+    }
+
+    public void start() throws Exception {
+        getOrStart();
     }
 
     public synchronized void stop() {
@@ -68,7 +79,10 @@ public class DialtoneAmbientSession {
 
         if (endpointRef != null) {
             try {
-                endpointRef.closeAsync().thenRun(() -> {
+                closeFuture = endpointRef.closeAsync().handle((ignored, failure) -> {
+                    if (failure != null) {
+                        E4allClient.LOGGER.warn("Error closing DialtoneAmbientSession endpoint asynchronously", failure);
+                    }
                     try {
                         endpointRef.close();
                     } catch (Throwable e) {
@@ -77,6 +91,7 @@ public class DialtoneAmbientSession {
                     if (dispatcherRef != null) {
                         dispatcherRef.interrupt();
                     }
+                    return null;
                 });
             } catch (Throwable e) {
                 E4allClient.LOGGER.warn("Error closing DialtoneAmbientSession endpoint", e);
@@ -88,6 +103,7 @@ public class DialtoneAmbientSession {
                 if (dispatcherRef != null) {
                     dispatcherRef.interrupt();
                 }
+                closeFuture = CompletableFuture.completedFuture(null);
             }
         } else if (dispatcherRef != null) {
             dispatcherRef.interrupt();

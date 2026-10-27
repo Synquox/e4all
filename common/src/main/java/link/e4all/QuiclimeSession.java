@@ -54,18 +54,12 @@ public class QuiclimeSession {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    private static final int MAX_RECONNECT_ATTEMPTS = 5;
-    private static final int RECONNECT_BASE_DELAY_SECONDS = 2;
     private static final int KEEPALIVE_INTERVAL_SECONDS = 15;
     private static final int MAX_IDLE_TIMEOUT_SECONDS = 15;
     private static final int RELAY_CONNECT_TIMEOUT_MS = 15_000;
 
-    private int getMaxReconnectAttempts() {
-        try { return Config.INSTANCE.reconnectMaxAttempts.value(); } catch (Throwable t) { return MAX_RECONNECT_ATTEMPTS; }
-    }
-    private int getReconnectBaseDelay() {
-        try { return Config.INSTANCE.reconnectBaseDelaySeconds.value(); } catch (Throwable t) { return RECONNECT_BASE_DELAY_SECONDS; }
-    }
+    private static final String DISCORD_URL = "https://discord.gg/mUYW9Rw2ae";
+
     private int getKeepaliveInterval() {
         try { return Config.INSTANCE.keepaliveIntervalSeconds.value(); } catch (Throwable t) { return KEEPALIVE_INTERVAL_SECONDS; }
     }
@@ -77,6 +71,7 @@ public class QuiclimeSession {
 
     // the world this tunnel belongs to, so a session never outlives it
     private final net.minecraft.server.MinecraftServer ownerServer;
+    private final int localPort;
 
     private static final long STOP_WATCHDOG_MS = 5000L;
 
@@ -223,8 +218,7 @@ public class QuiclimeSession {
         STARTED,
         UNHEALTHY,
         STOPPING,
-        STOPPED,
-        RECONNECTING
+        STOPPED
     }
 
     static class BrokerResponse {
@@ -241,18 +235,47 @@ public class QuiclimeSession {
     private volatile String cachedTicket;
     private volatile ScheduledFuture<?> keepaliveFuture;
     private volatile ScheduledFuture<?> connectWatchdogFuture;
-    private final AtomicInteger reconnectCount = new AtomicInteger(0);
     private volatile long lastCapabilitiesResponseTime;
     private final AtomicInteger missedKeepaliveCount = new AtomicInteger(0);
 
     public QuiclimeSession(ChannelHandler handler, EventLoopGroup group) {
-        this(handler, group, null);
+        this(handler, group, null, 0);
     }
 
     public QuiclimeSession(ChannelHandler handler, EventLoopGroup group, net.minecraft.server.MinecraftServer ownerServer) {
         this.handler = handler;
         this.group = group;
         this.ownerServer = ownerServer;
+        this.localPort = 0;
+    }
+
+    public QuiclimeSession(ChannelHandler handler, EventLoopGroup group, net.minecraft.server.MinecraftServer ownerServer, int localPort) {
+        this.handler = handler;
+        this.group = group;
+        this.ownerServer = ownerServer;
+        this.localPort = localPort;
+    }
+
+    public int localPort() {
+        if (localPort > 0) {
+            return localPort;
+        }
+        if (ownerServer != null) {
+            try {
+                int p = ownerServer.getPort();
+                if (p > 0) return p;
+            } catch (Throwable ignored) {}
+        }
+        if (Agnos.isClient()) {
+            try {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc != null && mc.getSingleplayerServer() != null) {
+                    int p = mc.getSingleplayerServer().getPort();
+                    if (p > 0) return p;
+                }
+            } catch (Throwable ignored) {}
+        }
+        return 0;
     }
 
     public net.minecraft.server.MinecraftServer ownerServer() {
@@ -435,7 +458,7 @@ public class QuiclimeSession {
                                 super.channelInactive(ctx);
                                 LOGGER.warn("QUIC channel became inactive (relay connection lost)");
                                 cancelKeepalive();
-                                beginReconnect();
+                                stopWithRelayLostMessage();
                             }
                         })
                         .remoteAddress(new InetSocketAddress(resolvePreferIpv4(relayInfo.host), relayInfo.port))
@@ -466,7 +489,6 @@ public class QuiclimeSession {
                                     missedKeepaliveCount.set(0);
                                     if (msg instanceof ControlMessageCodec.DomainAssignmentCompleteMessageClientbound) {
                                         state = State.STARTED;
-                                        reconnectCount.set(0);
 
                                         if (!Agnos.isClient()) {
                                             LOGGER.warn("e4all running on Dedicated Server; This works, but isn't recommended as e4all is designed for short-lived LAN servers");
@@ -482,37 +504,31 @@ public class QuiclimeSession {
                                         }
                                         if (Agnos.isClient()) {
                                             try {
-                                                Component domainComponent = Mirror.literal(domain);
-                                                if (Config.INSTANCE.hideDomainInChat.value()) {
-                                                    domainComponent = Mirror.translatable("text.e4all_minecraft.hiddenDomain");
+                                                int port = localPort();
+                                                if (port <= 0) {
+                                                    port = 25565;
                                                 }
-                                                ClickEvent copyEvent = Mirror.copyToClipboard(domain);
-                                                HoverEvent hoverEvent = Mirror.showText(Mirror.translatable("chat.copy.click"));
-                                                Component styledDomain = Mirror.withStyle(domainComponent, it -> {
-                                                    Style s = it.withColor(ChatFormatting.GREEN);
-                                                    if (copyEvent != null) s = s.withClickEvent(copyEvent);
-                                                    if (hoverEvent != null) s = s.withHoverEvent(hoverEvent);
-                                                    return s;
-                                                });
-                                                ClickEvent stopEvent = Mirror.runCommand("/e4all stop");
-                                                Component styledStop = Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.clickToStop"), it -> {
-                                                    Style s = it.withColor(ChatFormatting.GRAY);
-                                                    if (stopEvent != null) s = s.withClickEvent(stopEvent);
-                                                    return s;
-                                                });
-                                                Component message = Mirror.append(
-                                                        Mirror.translatable("text.e4all_minecraft.domainAssigned", styledDomain),
-                                                        styledStop
-                                                );
-                                                Mirror.addMessage(message);
+                                                String cleanDomain = domain;
+                                                if (domain.contains(":")) {
+                                                    int idx = domain.lastIndexOf(':');
+                                                    try {
+                                                        port = Integer.parseInt(domain.substring(idx + 1));
+                                                        cleanDomain = domain.substring(0, idx);
+                                                    } catch (NumberFormatException ignored) {}
+                                                }
+
+                                                boolean isOffline = Config.INSTANCE.offlineMode.value();
+                                                boolean hideDomain = Config.INSTANCE.hideDomainInChat.value();
+
+                                                Component box = HostedWorldChatBox.create(cleanDomain, port, isOffline, hideDomain);
+                                                Mirror.addMessage(box);
+
                                                 if (isReassignment) {
                                                     LOGGER.info("Domain reassigned: {} (was: {})", domain, oldDomain);
                                                 }
-                                                // show offline warning on lan open (first assignment only)
-                                                if (!isReassignment && Config.INSTANCE.offlineMode.value()) {
+                                                if (!isReassignment && isOffline) {
                                                     Config.INSTANCE.offlineWarningShown.setValue(true, true);
                                                     LOGGER.warn("e4all: Offline mode enabled, mojang auth is disabled for this session.");
-                                                    Mirror.addMessage(Mirror.withStyle(Mirror.translatable("text.e4all_minecraft.offlineModeWarning"), it -> it.withColor(ChatFormatting.RED)));
                                                 }
                                                 // one-time welcome message for the host (first assignment only)
                                                 if (!isReassignment && !Config.INSTANCE.welcomeShown.value()) {
@@ -673,7 +689,6 @@ public class QuiclimeSession {
                                 channel.close();
                             } catch (Throwable t) {
                                 LOGGER.debug("e4all: error closing unhealthy relay channel", t);
-                                beginReconnect();
                             }
                         }
                     }
@@ -697,6 +712,15 @@ public class QuiclimeSession {
             future.cancel(false);
         }
         connectWatchdogFuture = null;
+    }
+
+    private void cancelScheduledTasks() {
+        cancelKeepalive();
+        cancelConnectWatchdog();
+    }
+
+    private void closeVoiceStreams() {
+        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
     }
 
     private void startConnectWatchdog(EventLoop loop) {
@@ -725,130 +749,75 @@ public class QuiclimeSession {
         }, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
-    private void cleanupControlChannels() {
-        controlStreamChannel = null;
-        try {
-            if (quicChannel != null && quicChannel.isOpen()) {
-                quicChannel.close();
-            }
-        } catch (Throwable e) {
-            LOGGER.warn("Error closing QUIC channel during control cleanup", e);
+    private static UnsatisfiedLinkError findNativeLoadError(Throwable t) {
+        Throwable cursor = t;
+        while (cursor != null) {
+            if (cursor instanceof UnsatisfiedLinkError error) return error;
+            cursor = cursor.getCause();
         }
-        quicChannel = null;
-        cancelConnectWatchdog();
-        try {
-            if (datagramChannel != null && datagramChannel.isOpen()) {
-                datagramChannel.close();
-            }
-        } catch (Throwable e) {
-            LOGGER.warn("Error closing datagram channel during control cleanup", e);
+        return null;
+    }
+
+    private static Component withDiscordHelp(String message) {
+        Component discordLink = Mirror.withStyle(
+                Mirror.literal(DISCORD_URL),
+                style -> {
+                    Style styled = style.withColor(ChatFormatting.AQUA).withUnderlined(true);
+                    ClickEvent open = Mirror.openUrlEvent(DISCORD_URL);
+                    if (open != null) styled = styled.withClickEvent(open);
+                    return styled;
+                }
+        );
+        return Mirror.append(
+                Mirror.literal(message + " Need help? Join my Discord: "),
+                discordLink
+        );
+    }
+
+    private void stopWithRelayLostMessage() {
+        State current = state;
+        if (current == State.STOPPING || current == State.STOPPED) return;
+        state = State.STOPPED;
+        failureCause = null;
+        cancelScheduledTasks();
+        cleanupChannels();
+        closeVoiceStreams();
+        LOGGER.warn("e4all: relay connection lost, session stopped");
+        if (Agnos.isClient()) {
+            Mirror.addMessage(withDiscordHelp(
+                    "e4all: Relay connection lost. Re-open to LAN or run /e4all restart to host again."));
         }
-        datagramChannel = null;
     }
 
     private void fail(Throwable e) {
-        QuiclimeSession.this.state = State.UNHEALTHY;
+        State current = state;
+        if (current == State.STOPPING || current == State.STOPPED) return;
+        state = State.STOPPED;
         failureCause = e;
-        E4allClient.LOGGER.error("error in e4all", e);
+        cancelScheduledTasks();
+        cleanupChannels();
+        closeVoiceStreams();
+
+        boolean nativeError = findNativeLoadError(e) != null;
+        E4allClient.LOGGER.error("e4all: relay session failed" + (nativeError ? " (native library load failure)" : ""), e);
+
         if (Agnos.isClient()) {
-            Mirror.addMessage(Mirror.append(Mirror.translatable("text.e4all_minecraft.error"),
-                    Mirror.literal(" (" + e.getClass().getSimpleName() + ")")));
-        }
-        recoverFromFailure();
-    }
+            String reason = e.getClass().getSimpleName();
+            String message = e.getMessage();
+            if (message != null && !message.isBlank()) {
+                reason = reason + ": " + message;
+            }
+            String text = "e4all: could not host the world (" + reason + "). Re-open to LAN or run /e4all restart to try again.";
+            if (nativeError) {
+                text += " A required native library could not be loaded (on Windows this is often Smart App Control).";
+            }
 
-    private void recoverFromFailure() {
-        State current = state;
-        if (current == State.STOPPING || current == State.STOPPED) {
-            return;
+            Mirror.addMessage(withDiscordHelp(text));
         }
-        if (ownerServer != null && ownerServer.isStopped()) {
-            state = State.STOPPED;
-            return;
-        }
-        QuicChannel channel = quicChannel;
-        if (channel != null && channel.isOpen()) {
-            try {
-                channel.close();
-                return;
-            } catch (Throwable t) {
-                E4allClient.LOGGER.debug("e4all: error closing relay channel after failure", t);
-            }
-        }
-        beginReconnect();
-    }
-
-    private synchronized void beginReconnect() {
-        State current = state;
-        if (current == State.STOPPING || current == State.STOPPED || current == State.RECONNECTING) {
-            return;
-        }
-        if (ownerServer != null && ownerServer.isStopped()) {
-            state = State.STOPPED;
-            return;
-        }
-        cancelKeepalive();
-        int attempts = reconnectCount.incrementAndGet();
-        boolean host = ownerServer != null;
-        if (!host && attempts > getMaxReconnectAttempts()) {
-            LOGGER.error("Max reconnect attempts ({}) reached; giving up. Re-open the world to LAN or run /e4all restart.", getMaxReconnectAttempts());
-            state = State.STOPPED;
-            link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
-            if (Agnos.isClient()) {
-                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.maxReconnectFailed"));
-            }
-            return;
-        }
-        state = State.RECONNECTING;
-        int delay = Math.min(getReconnectBaseDelay() * attempts, 60);
-        if (host && attempts > getMaxReconnectAttempts()) {
-            LOGGER.warn("Host relay reconnect attempt {}; still trying (capped backoff)", attempts);
-        } else {
-            LOGGER.info("Auto-reconnecting to relay in {}s (attempt {}/{})", delay, attempts, getMaxReconnectAttempts());
-            if (Agnos.isClient()) {
-                Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.reconnecting"));
-            }
-        }
-        var reconnectThread = new Thread(() -> {
-            try {
-                Thread.sleep(delay * 1000L);
-                synchronized (E4allClient.SESSION_LOCK) {
-                    State currentState = state;
-                    if (currentState == State.RECONNECTING) {
-                        QuiclimeSession.this.cleanupControlChannels();
-                        start();
-                    } else {
-                        LOGGER.info("Reconnect cancelled (state changed to {})", currentState);
-                    }
-                }
-            } catch (InterruptedException ignored) {
-                state = State.STOPPED;
-            } catch (Throwable e) {
-                LOGGER.error("Failed to reconnect", e);
-                state = State.STOPPED;
-                link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
-                if (Agnos.isClient()) {
-                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.relayLost"));
-                }
-            }
-        }, "e4all_minecraft-reconnect");
-        reconnectThread.setDaemon(true);
-        reconnectThread.start();
     }
 
     private void failWithDiagnostics(Throwable e) {
-        Throwable cursor = e;
-        UnsatisfiedLinkError linkError = null;
-        while (cursor != null) {
-            if (cursor instanceof UnsatisfiedLinkError ule) {
-                linkError = ule;
-                break;
-            }
-            cursor = cursor.getCause();
-        }
-
-        QuiclimeSession.this.state = State.UNHEALTHY;
-        failureCause = e;
+        UnsatisfiedLinkError linkError = findNativeLoadError(e);
 
         if (linkError != null) {
             AndroidDetector.DetectionResult androidCheck = AndroidDetector.detect();
@@ -857,9 +826,6 @@ public class QuiclimeSession {
                         "Make sure you are running the -android variant of the jar (it bundles the Bionic build) " +
                         "and that the extracted native is writable/executable. " +
                         "Detection: {}. Linker error: {}", androidCheck.reason(), linkError.getMessage(), e);
-                if (Agnos.isClient()) {
-                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error.nativeLoadFailed"));
-                }
             } else {
                 E4allClient.LOGGER.error("e4all: Failed to load native QUIC library. " +
                         "Platform: os.name={}, os.arch={}, java.vm.name={}. Linker error: {}",
@@ -867,17 +833,9 @@ public class QuiclimeSession {
                         System.getProperty("os.arch", "unknown"),
                         System.getProperty("java.vm.name", "unknown"),
                         linkError.getMessage(), e);
-                if (Agnos.isClient()) {
-                    Mirror.addMessage(Mirror.translatable("text.e4all_minecraft.error.nativeLoadFailed"));
-                }
-            }
-        } else {
-            E4allClient.LOGGER.error("error in e4all", e);
-            if (Agnos.isClient()) {
-                Mirror.addMessage(Mirror.append(Mirror.translatable("text.e4all_minecraft.error"),
-                        Mirror.literal(" (" + e.getClass().getSimpleName() + ")")));
             }
         }
+        fail(e);
     }
 
     private static void afterCloseIfPresent(Channel channel, Consumer<Boolean> callback) {
@@ -890,10 +848,9 @@ public class QuiclimeSession {
 
     public void stop() {
         state = State.STOPPING;
-        cancelKeepalive();
-        cancelConnectWatchdog();
+        cancelScheduledTasks();
         controlStreamChannel = null;
-        link.e4all.voice.VoiceConnectionManager.INSTANCE.closeAll();
+        closeVoiceStreams();
         // async, a stuck native close would freeze the game here
         afterCloseIfPresent(dialtoneChannel, q -> afterCloseIfPresent(quicChannel, a -> afterCloseIfPresent(datagramChannel, b -> markStopped())));
         scheduleStopWatchdog();
@@ -961,7 +918,7 @@ public class QuiclimeSession {
             try {
                 return NetDns.resolve(host);
             } catch (Throwable t) {
-                LOGGER.warn("e4all: netty dns failed for {}, trying system resolver", host);
+                LOGGER.warn("e4all: Android DNS lookup for {} failed, retrying system resolver", host);
             }
         }
         InetAddress[] all = InetAddress.getAllByName(host);

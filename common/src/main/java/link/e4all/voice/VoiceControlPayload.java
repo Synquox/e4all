@@ -39,7 +39,46 @@ public final class VoiceControlPayload {
     private static volatile Object registeredType;
 
     public static Object getRegisteredType() {
-        return registeredType;
+        Object existing = registeredType;
+        if (existing != null) return existing;
+        synchronized (VoiceControlPayload.class) {
+            if (registeredType != null) return registeredType;
+            Class<?> payloadIf = getPayloadInterface();
+            if (payloadIf == null) return null;
+            Class<?> typeCls = getTypeClass(payloadIf);
+            Object channel = channel();
+            Object typeTmp = null;
+            if (typeCls != null) {
+                for (Constructor<?> ctor : typeCls.getDeclaredConstructors()) {
+                    try {
+                        ctor.setAccessible(true);
+                        Class<?>[] p = ctor.getParameterTypes();
+                        if (p.length == 1 && ((channel != null && p[0].isInstance(channel)) || ResourceLocReflector.isAssignableFrom(p[0]))) {
+                            typeTmp = ctor.newInstance(channel);
+                            break;
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            }
+            if (typeTmp == null && payloadIf != null) {
+                for (Method m : payloadIf.getMethods()) {
+                    if (Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 1
+                            && (m.getReturnType().equals(typeCls) || (typeCls != null && typeCls.isAssignableFrom(m.getReturnType())))) {
+                        try {
+                            if (m.getParameterTypes()[0].equals(String.class)) {
+                                typeTmp = m.invoke(null, "e4all:voice");
+                                break;
+                            } else if (channel != null && m.getParameterTypes()[0].isInstance(channel)) {
+                                typeTmp = m.invoke(null, channel);
+                                break;
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            }
+            registeredType = typeTmp;
+            return registeredType;
+        }
     }
 
     public static Class<?> getPayloadInterface() {
@@ -81,7 +120,7 @@ public final class VoiceControlPayload {
         if (payloadIf == null) return null;
         ClassLoader cl = payloadIf.getClassLoader();
         final byte[] finalData = data != null ? data : new byte[0];
-        final Object type = registeredType;
+        final Object type = getRegisteredType();
         final Object channel = channel();
 
         return Proxy.newProxyInstance(cl, new Class<?>[]{payloadIf, RawPayload.class}, (p, m, a) -> {
@@ -109,14 +148,12 @@ public final class VoiceControlPayload {
                 return type;
             }
 
-            // Older ResourceLocation id()
             if (pCount == 0 && channel != null && ret.isInstance(channel)) {
                 return channel;
             }
 
-            // write(FriendlyByteBuf)
             if (pCount == 1 && (ret == void.class || ret.isAssignableFrom(payloadIf))) {
-                if (a != null && a.length == 1 && a[0] instanceof FriendlyByteBuf buf) {
+                if (a != null && a.length == 1 && a[0] instanceof ByteBuf buf) {
                     if (finalData.length > 0) {
                         buf.writeBytes(finalData);
                     }
@@ -128,6 +165,34 @@ public final class VoiceControlPayload {
         });
     }
 
+    public static void registerForge() {
+        invokeForgeBridge("register", new Class<?>[0]);
+    }
+
+    public static boolean sendServerboundForge(byte[] data) {
+        Object result = invokeForgeBridge("sendServerbound", new Class<?>[]{byte[].class}, (Object) data);
+        return Boolean.TRUE.equals(result);
+    }
+
+    public static boolean sendClientboundForge(ServerPlayer player, byte[] data) {
+        Object result = invokeForgeBridge("sendClientbound",
+                new Class<?>[]{ServerPlayer.class, byte[].class}, player, data);
+        return Boolean.TRUE.equals(result);
+    }
+
+    private static Object invokeForgeBridge(String methodName, Class<?>[] parameterTypes, Object... args) {
+        try {
+            Class<?> bridge = findClass("link.e4all.forge.ForgeVoiceControlBridge");
+            if (bridge == null) {
+                E4allClient.LOGGER.error("e4all voice: Forge voice bridge is unavailable; {} was not invoked", methodName);
+                return null;
+            }
+            return bridge.getMethod(methodName, parameterTypes).invoke(null, args);
+        } catch (Throwable t) {
+            E4allClient.LOGGER.error("e4all voice: Forge voice bridge call failed ({})", methodName, t);
+            return null;
+        }
+    }
     public static void registerFabric() {
         try {
             ClassLoader cl = VoiceControlPayload.class.getClassLoader();
@@ -531,12 +596,11 @@ public final class VoiceControlPayload {
     }
 
     private static Class<?> findClass(ClassLoader cl, String... names) {
-        for (String name : names) {
-            try {
-                return Class.forName(name, false, cl);
-            } catch (ClassNotFoundException ignored) {}
-        }
-        return null;
+        return ResourceLocReflector.findClass(cl, names);
+    }
+
+    private static Class<?> findClass(String... names) {
+        return ResourceLocReflector.findClass(names);
     }
 
     private static boolean isResourceLoc(Class<?> candidate) {
@@ -596,85 +660,61 @@ public final class VoiceControlPayload {
         return null;
     }
 
+    private static Object invokeNoArg(Object target, String name) {
+        try {
+            Method method = target.getClass().getMethod(name);
+            if (method.getParameterCount() == 0) {
+                method.setAccessible(true);
+                return method.invoke(target);
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    private static Object identifierFromAccessors(Object target, String... methodNames) {
+        for (String methodName : methodNames) {
+            Object value = invokeNoArg(target, methodName);
+            if (value != null) {
+                Object id = unwrapTypeId(value);
+                return id != null ? id : value;
+            }
+        }
+        return null;
+    }
+
+    private static Object identifierFromFields(Object target) {
+        for (Field field : target.getClass().getDeclaredFields()) {
+            try {
+                field.setAccessible(true);
+                Object value = field.get(target);
+                Object id = value != null ? unwrapTypeId(value) : null;
+                if (id != null) return id;
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
     public static Object extractChannelFromPayload(Object payload) {
         if (payload == null) return null;
         if (payload instanceof RawPayload raw) {
             Object ch = raw.channel();
             if (ch != null) return ch;
         }
-        Class<?> cls = payload.getClass();
         for (String typeMethodName : new String[]{"type", "getType", "method_56479"}) {
-            try {
-                Method m = cls.getMethod(typeMethodName);
-                if (m.getParameterCount() == 0) {
-                    m.setAccessible(true);
-                    Object typeObj = m.invoke(payload);
-                    if (typeObj != null) {
-                        if (registeredType != null && registeredType.equals(typeObj)) {
-                            return channel();
-                        }
-                        Object id = unwrapTypeId(typeObj);
-                        if (id != null) return id;
-                    }
-                }
-            } catch (Throwable ignored) {}
+            Object type = invokeNoArg(payload, typeMethodName);
+            if (type == null) continue;
+            if (registeredType != null && registeredType.equals(type)) return channel();
+            Object id = unwrapTypeId(type);
+            if (id != null) return id;
         }
-
-        for (String idMethodName : new String[]{"id", "getId", "method_56479"}) {
-            try {
-                Method m = cls.getMethod(idMethodName);
-                if (m.getParameterCount() == 0) {
-                    m.setAccessible(true);
-                    Object id = m.invoke(payload);
-                    if (id != null) {
-                        Object unwrap = unwrapTypeId(id);
-                        return unwrap != null ? unwrap : id;
-                    }
-                }
-            } catch (Throwable ignored) {}
-        }
-
-        for (Field f : cls.getDeclaredFields()) {
-            try {
-                f.setAccessible(true);
-                Object val = f.get(payload);
-                if (val != null) {
-                    Object unwrap = unwrapTypeId(val);
-                    if (unwrap != null) return unwrap;
-                }
-            } catch (Throwable ignored) {}
-        }
-
-        return null;
+        Object id = identifierFromAccessors(payload, "id", "getId", "method_56479");
+        return id != null ? id : identifierFromFields(payload);
     }
 
     public static Object extractChannelFromPacket(Object packet) {
         if (packet == null) return null;
-        Class<?> cls = packet.getClass();
-        for (String mName : new String[]{"getName", "getIdentifier", "channel", "getId", "method_11453"}) {
-            try {
-                Method m = cls.getMethod(mName);
-                if (m.getParameterCount() == 0) {
-                    m.setAccessible(true);
-                    Object id = m.invoke(packet);
-                    if (id != null) {
-                        Object unwrap = unwrapTypeId(id);
-                        return unwrap != null ? unwrap : id;
-                    }
-                }
-            } catch (Throwable ignored) {}
-        }
-        for (Field f : cls.getDeclaredFields()) {
-            try {
-                f.setAccessible(true);
-                Object val = f.get(packet);
-                if (val != null) {
-                    Object unwrap = unwrapTypeId(val);
-                    if (unwrap != null) return unwrap;
-                }
-            } catch (Throwable ignored) {}
-        }
-        return null;
+        Object id = identifierFromAccessors(packet, "getName", "getIdentifier", "channel", "getId", "method_11453");
+        return id != null ? id : identifierFromFields(packet);
     }
 
     public static boolean isOwnPacket(Object packet, Object payload) {

@@ -75,7 +75,7 @@ public abstract class PlayerListMixin {
                 readyTimeoutMs = Config.INSTANCE.loginReadyTimeoutMs.value();
             } catch (Throwable ignored) {}
             if (readyTimeoutMs > 0
-                    && (ServerStartupTracker.isStarting(server) || ServerStartupTracker.isMidFirstTick(server))) {
+                    && ServerStartupTracker.isWaitingForFirstTick(server)) {
                 E4allClient.LOGGER.info("e4all: holding guest login until the world is ticking ({}, up to {} ms)",
                         ServerStartupTracker.describe(server), readyTimeoutMs);
                 if (!ServerStartupTracker.awaitReady(server, readyTimeoutMs, () -> e4all$ownsActiveSession(server))) {
@@ -94,8 +94,7 @@ public abstract class PlayerListMixin {
                 cir.setReturnValue(Mirror.translatable("text.e4all_minecraft.worldLoading"));
                 return;
             }
-            if (ServerStartupTracker.isStarting(server)
-                    || ServerStartupTracker.isMidFirstTick(server)
+            if (ServerStartupTracker.isWaitingForFirstTick(server)
                     || ServerStartupTracker.isStopping(server)) {
                 E4allClient.LOGGER.info("e4all: rejecting guest login, world is (re)starting or stopping ({})",
                         ServerStartupTracker.describe(server));

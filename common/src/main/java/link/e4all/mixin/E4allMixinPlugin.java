@@ -18,6 +18,9 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
     private static final boolean HAS_MODERN_PAYLOADS;
     // 1.21.2+ payload dispatch codec
     private static final boolean HAS_MODERN_PAYLOAD_CODEC_TARGETS;
+    private static final boolean IS_FABRIC_RUNTIME = isFabricRuntime();
+    private static final boolean HAS_LEGACY_GUI_MESSAGE_TAG;
+    private static final boolean HAS_MODERN_GUI_MESSAGE_TAG;
     private static final int MC_GENERATION = detectMinecraftGeneration();
     static {
         boolean hasSignatures = false;
@@ -61,8 +64,7 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
                 cl.getResource("net/minecraft/client/gui/screens/ShareToLanScreen.class") != null
              || cl.getResource("net/minecraft/class_527.class") != null;
         HAS_WORLD_OPTIONS_SCREEN =
-                cl.getResource("net/minecraft/client/gui/screens/WorldOptionsScreen.class") != null
-             || cl.getResource("net/minecraft/client/gui/screens/options/WorldOptionsScreen.class") != null;
+                cl.getResource("net/minecraft/client/gui/screens/WorldOptionsScreen.class") != null;
 
         boolean hasModernPayloads = false;
         try {
@@ -80,6 +82,19 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
         } catch (Throwable ignored) {
         }
         HAS_MODERN_PAYLOAD_CODEC_TARGETS = hasPayloadCodecTargets;
+
+        HAS_LEGACY_GUI_MESSAGE_TAG = cl.getResource("net/minecraft/client/GuiMessageTag.class") != null;
+        HAS_MODERN_GUI_MESSAGE_TAG =
+                cl.getResource("net/minecraft/client/multiplayer/chat/GuiMessageTag.class") != null;
+    }
+
+    private static boolean isFabricRuntime() {
+        try {
+            Class.forName("net.fabricmc.loader.api.FabricLoader");
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static int detectMinecraftGeneration() {
@@ -128,13 +143,23 @@ public class E4allMixinPlugin implements IMixinConfigPlugin {
                 }
                 return HAS_CHAT_SESSION_UPDATE_PACKET && MC_GENERATION >= 21;
             }
-            if (mixinClassName.endsWith("MixinPlayerListLegacy")) {
-                return true;
+            if (mixinClassName.endsWith("MixinPlayerListLegacy")
+                    || mixinClassName.endsWith("MixinServerGamePacketListenerImpl")) {
+                return HAS_SIGNATURES && HAS_CHAT_SENDER;
             }
             if (mixinClassName.endsWith("MixinPlayerList")) {
                 return HAS_SIGNATURES && !HAS_CHAT_SENDER;
             }
             return HAS_SIGNATURES;
+        }
+
+        if (mixinClassName.endsWith("ChatComponentTaggedMixin")) {
+            return HAS_SIGNATURES && !HAS_MODERN_GUI_MESSAGE_TAG
+                    && (HAS_LEGACY_GUI_MESSAGE_TAG
+                            || (IS_FABRIC_RUNTIME && MC_GENERATION > 0 && MC_GENERATION < 26));
+        }
+        if (mixinClassName.endsWith("ChatComponentModernTaggedMixin")) {
+            return HAS_SIGNATURES && HAS_MODERN_GUI_MESSAGE_TAG;
         }
 
         if (mixinClassName.endsWith("MultiplayerOptionsScreenMixin")) {

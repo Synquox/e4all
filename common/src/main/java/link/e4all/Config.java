@@ -30,10 +30,6 @@ public class Config extends ReflectiveConfig {
     public final TrackedValue<String> dialtoneRelayMap = this.value("https://natives.e4mc.link/relaymap.json");
     @Comment("Whether to hide direct IP addresses from the relay")
     public final TrackedValue<Boolean> dialtoneSanitizeTicket = this.value(true);
-    @Comment("How many times to try to reconnect to the relay before giving up when the connection drops")
-    public final TrackedValue<Integer> reconnectMaxAttempts = this.value(5);
-    @Comment("Initial reconnect delay in seconds; doubles with each subsequent attempt")
-    public final TrackedValue<Integer> reconnectBaseDelaySeconds = this.value(2);
     @Comment("Keepalive probe interval in seconds to keep the relay session alive")
     public final TrackedValue<Integer> keepaliveIntervalSeconds = this.value(15);
     @Comment("How long (in ms) a guest login may wait for a starting world to finish its first tick before being rejected. Heavy modpacks can stall a full server tick for several seconds; waiting avoids kicking everyone who joins in that window. Set to 0 to reject immediately instead of waiting.")
