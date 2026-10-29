@@ -52,10 +52,9 @@ It is a fork of **e4mc** packed with fixes and quality-of-life additions: **offl
 | **Krypton Compatibility** | ❌ | ✅ | Krypton works if used with e4all, this was just a incompatibility before and it isn't anymore. |
 | **Android** | ❌ | ✅ | E4all works on Minecraft Java Launchers for Android. |
 | **No-Chat-Reports (NCR)** | ❌ | ✅ | Strips chat signatures and disables secure profile enforcement when Offline Mode is on. The e4all NCR feature was inspired by the NCR mod. |
-| **Forge 1.20.6-26.3 support** | ❌ | ✅ | E4all supports Forge 1.20.6-26.3; e4mc supports Forge through 1.20.4. |
+| **Forge 1.20.6-26.3 support** | ❌ | ✅ | E4all supports Forge from 1.18.x up to 26.3 in a single jar; e4mc only supports Forge through 1.20.4. |
 
-Do note that I only added Krypton compatibility because people were accidentally having it installed alongside e4all and it was causing problems. Having Krypton installed alongside e4all is pretty much useless.
-I only recommend using Krypton if you run an actual server, though I can't say much as I personally haven't really used Krypton before.
+<sub>Do note that I only added Krypton compatibility because people were accidentally having it installed alongside e4all and it was causing problems. Having Krypton installed alongside e4all is pretty much useless. I only recommend using Krypton if you run an actual server, though I can't say much as I personally haven't really used Krypton before.</sub>
 ---
 
 ### Supported Versions & Mod Loaders
@@ -64,7 +63,7 @@ I only recommend using Krypton if you run an actual server, though I can't say m
 | :--- | :--- |
 | **Fabric** | 1.18.x - 26.4-snapshot-5 |
 | **NeoForge** | 1.18.x - 26.4-snapshot-5 |
-| **Forge** | 1.18.x - 1.20.4 (legacy jar), 1.20.6 - 26.3 (current jar) |
+| **Forge** | 1.18.x - 26.3 |
 | **Android** | Android Java wrappers supported! (Windows, Linux and MacOS ofc too)|
 
 ### Device Compatibility

@@ -1,0 +1,105 @@
+name: Bug report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug"]
+assignees:
+  - Synquox
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > [!IMPORTANT]
+        > Only use this form if you are reporting an actual bug in the mod. If you need setup assistance, connection troubleshooting, or general help, please ask on our [Discord server](https://discord.gg/mUYW9Rw2ae) instead.
+
+        Please verify that you are running the latest version of e4all and that this issue has not already been submitted.
+
+  - type: dropdown
+    id: loader
+    attributes:
+      label: Mod Loader
+      description: Which mod loader are you running?
+      options:
+        - Fabric
+        - NeoForge
+        - Forge
+    validations:
+      required: true
+
+  - type: input
+    id: mc_version
+    attributes:
+      label: Minecraft Version
+      description: What Minecraft version are you using?
+      placeholder: e.g. 1.20.1, 1.21.1
+    validations:
+      required: true
+
+  - type: input
+    id: mod_version
+    attributes:
+      label: e4all Version
+      description: What version of e4all is installed?
+      placeholder: e.g. 1.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System / Platform
+      description: What operating system are you or the host running on?
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Android (PojavLauncher, etc.)
+    validations:
+      required: true
+
+  - type: input
+    id: svc_version
+    attributes:
+      label: Simple Voice Chat Version (if applicable)
+      description: If this issue involves voice chat, what version of Simple Voice Chat are you using?
+      placeholder: e.g. 2.5.15 (or N/A)
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear description of what happened and what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the problem.
+      placeholder: |
+        1. Open singleplayer world
+        2. Click 'Open to LAN'
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log / Crash Report
+      description: Please link your latest.log or crash report using a paste service like https://mclo.gs or https://gist.github.com. Do not paste the raw log directly into this form.
+      placeholder: https://mclo.gs/...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and confirmed this is not a duplicate.
+          required: true
+        - label: I tested with the latest release of e4all.
+          required: true

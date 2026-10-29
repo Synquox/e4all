@@ -1,0 +1,35 @@
+name: Translation
+description: Submit a translation for e4all
+title: "[Translation]: "
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for contributing a translation. Please check if a translation for your language already exists before submitting.
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: What language are you submitting a translation for?
+      placeholder: e.g. German, French, Japanese
+    validations:
+      required: true
+
+  - type: input
+    id: language_code
+    attributes:
+      label: Language Code
+      description: The language code for your language.
+      placeholder: e.g. de_de, fr_fr, ja_jp
+    validations:
+      required: true
+
+  - type: textarea
+    id: translation
+    attributes:
+      label: Translation
+      description: Paste your translation file contents here, or link to a file/gist if it is large.
+    validations:
+      required: true
